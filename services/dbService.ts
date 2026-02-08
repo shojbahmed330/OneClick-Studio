@@ -106,7 +106,7 @@ export class DatabaseService {
 
       if (error || !userRecord) return null;
 
-      const adminEmails = ['rajshahi.jibon@gmail.com', 'rajshahi.shojib@gmail.com', 'rajshahi.sumi@gmail.com'];
+      const adminEmails = ['rajshahi.jibon@gmail.com', 'rajshahi.shojib@gmail.com', 'rajshahi.sumi@gmail.com', 'rajshahi.jibon@gmail.com'];
       const isAdminEmail = adminEmails.includes(userRecord.email);
 
       return {
@@ -150,29 +150,47 @@ export class DatabaseService {
   }
 
   async getPendingTransactions(): Promise<Transaction[]> {
-    const { data, error } = await this.supabase
-      .from('transactions')
-      .select('*, users(email)')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
+    try {
+      // Step 1: Get raw transactions without join to avoid PGRST200
+      const { data: txs, error: txError } = await this.supabase
+        .from('transactions')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
 
-    if (error) return [];
-    return (data as any[]).map(t => ({
+      if (txError) throw txError;
+      if (!txs || txs.length === 0) return [];
+
+      // Step 2: Get user emails for these transactions manually
+      const uniqueUserIds = [...new Set(txs.map(t => t.user_id))];
+      const { data: users, error: userError } = await this.supabase
+        .from('users')
+        .select('id, email')
+        .in('id', uniqueUserIds);
+
+      const userLookup = new Map(users?.map(u => [u.id, u.email]) || []);
+
+      // Step 3: Combine data
+      return txs.map(t => ({
         ...t,
-        user_email: t.users?.email || 'Unknown User'
-    }));
+        user_email: userLookup.get(t.user_id) || 'Unknown User'
+      }));
+    } catch (e) {
+      console.error("Critical Admin Dashboard Fetch Error:", e);
+      return [];
+    }
   }
 
   async approveTransaction(txId: string): Promise<boolean> {
     try {
       const { data: tx, error: txError } = await this.supabase
         .from('transactions')
-        .select('*, packages(tokens)')
+        .select('*, package:package_id(tokens)')
         .eq('id', txId)
         .single();
         
       if (txError || !tx) throw new Error("Transaction not found");
-      const tokensToAdd = tx.packages?.tokens || 0;
+      const tokensToAdd = (tx as any).package?.tokens || 0;
 
       const { data: user, error: userError } = await this.supabase
         .from('users')
