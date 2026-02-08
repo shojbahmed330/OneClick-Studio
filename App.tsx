@@ -304,53 +304,78 @@ const App: React.FC = () => {
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
 
-  // Simplified and robust auth listener for OAuth redirects
+  // Robust Auth handling with Retry mechanism for slow DB triggers
   useEffect(() => {
     let mounted = true;
+    let retryCount = 0;
+    const MAX_RETRIES = 5;
 
-    const checkInitialSession = async () => {
+    const fetchUserProfile = async (email: string, id: string) => {
       try {
-        const session = await db.getCurrentSession();
-        if (session?.user && mounted) {
-          const userData = await db.getUser(session.user.email || '', session.user.id);
-          if (userData && mounted) {
-            setUser(userData);
+        const userData = await db.getUser(email, id);
+        if (userData && mounted) {
+          setUser(userData);
+          const curPath = window.location.pathname;
+          if (curPath === '/login' || curPath === '/' || !curPath) {
+            navigate('/dashboard');
           }
+          setAuthLoading(false);
+          return true;
         }
+        return false;
       } catch (err) {
-        console.error("Initial Session Check failed:", err);
-      } finally {
+        console.error("Profile fetch error:", err);
+        return false;
+      }
+    };
+
+    const attemptLogin = async (email: string, id: string) => {
+      const success = await fetchUserProfile(email, id);
+      if (!success && retryCount < MAX_RETRIES) {
+        retryCount++;
+        setTimeout(() => attemptLogin(email, id), 1500); // Retry every 1.5s
+      } else {
         if (mounted) setAuthLoading(false);
       }
     };
 
-    checkInitialSession();
-
-    const { data: { subscription } } = db.onAuthStateChange(async (event, session) => {
+    // 1. Initial Session Check
+    const checkSession = async () => {
       try {
+        const session = await db.getCurrentSession();
         if (session?.user && mounted) {
-          const userData = await db.getUser(session.user.email || '', session.user.id);
-          if (userData && mounted) {
-            setUser(userData);
-            // Auto-navigate to dashboard if on login or landing
-            const curPath = window.location.pathname;
-            if (curPath === '/login' || curPath === '/' || !curPath) {
-              navigate('/dashboard');
-            }
-          }
-        } else if (mounted) {
-          setUser(null);
+          await attemptLogin(session.user.email || '', session.user.id);
+        } else {
+          if (mounted) setAuthLoading(false);
         }
-      } catch (err) {
-        console.error("Auth Change logic error:", err);
-      } finally {
+      } catch (e) {
+        if (mounted) setAuthLoading(false);
+      }
+    };
+    checkSession();
+
+    // 2. Auth State Listener (Handles Redirects)
+    const { data: { subscription } } = db.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      
+      if (session?.user) {
+        retryCount = 0; // Reset for new sign in
+        await attemptLogin(session.user.email || '', session.user.id);
+      } else {
+        setUser(null);
         if (mounted) setAuthLoading(false);
       }
     });
 
+    // 3. Safety Timeout (Never stay stuck more than 10 seconds)
+    const safetyTimer = setTimeout(() => {
+      if (mounted && authLoading) setAuthLoading(false);
+    }, 10000);
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      clearTimeout(safetyTimer);
     };
   }, []);
 
