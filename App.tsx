@@ -6,13 +6,14 @@ import {
   AlertCircle, Key, Mail, ArrowLeft, FileCode, ShoppingCart, User as UserIcon,
   ChevronRight, Github, Save, Trash2, Square, Circle, RefreshCw, Fingerprint,
   User, Lock, Eye, EyeOff, MessageSquare, Monitor, CreditCard, Upload, X, ShieldCheck,
-  FileJson, Layout, Users, BarChart3, Clock, Wallet, CheckCircle2, XCircle, Search, Trash
+  FileJson, Layout, Users, BarChart3, Clock, Wallet, CheckCircle2, XCircle, Search
 } from 'lucide-react';
 import { AppMode, ChatMessage, User as UserType, GithubConfig, Package, Transaction } from './types';
 import { GeminiService } from './services/geminiService';
 import { DatabaseService } from './services/dbService';
 import { GithubService } from './services/githubService';
 
+// --- ADMIN LOGIN PAGE ---
 const AdminLoginPage: React.FC<{ onLoginSuccess: (user: UserType) => void }> = ({ onLoginSuccess }) => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
@@ -63,6 +64,7 @@ const AdminLoginPage: React.FC<{ onLoginSuccess: (user: UserType) => void }> = (
   );
 };
 
+// --- RESTORED SCAN PAGE ---
 const ScanPage: React.FC<{ onFinish: () => void }> = ({ onFinish }) => {
   const [isScanning, setIsScanning] = useState(false);
   const handleStartAuth = () => {
@@ -70,24 +72,48 @@ const ScanPage: React.FC<{ onFinish: () => void }> = ({ onFinish }) => {
     setTimeout(() => onFinish(), 2000);
   };
   return (
-    <div className="h-[100dvh] w-full flex flex-col items-center justify-center bg-[#0f172a] text-white relative overflow-hidden font-sans p-4">
+    <div className="h-[100dvh] w-full flex flex-col items-center justify-start pt-6 md:justify-center md:pt-0 bg-[#0f172a] text-white relative overflow-hidden font-sans p-4">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent opacity-50"></div>
       <div className="flex flex-col items-center text-center animate-in fade-in zoom-in duration-700">
-        <h1 className="text-4xl md:text-6xl font-black tracking-tighter mb-12 bg-clip-text text-transparent bg-gradient-to-br from-white via-cyan-400 to-blue-600">OneClick Studio</h1>
-        <div onClick={!isScanning ? handleStartAuth : undefined} className="relative w-40 h-40 flex items-center justify-center cursor-pointer mb-8">
-          <Fingerprint size={80} className={`text-blue-600 transition-all duration-500 relative z-10 ${isScanning ? 'text-cyan-400 scale-110 animate-pulse' : 'animate-bounce'}`} />
-          {isScanning && <div className="absolute top-0 left-0 w-full h-1 bg-cyan-400 shadow-[0_0_20px_#22d3ee] rounded-full animate-[scanning_1.5s_infinite]"></div>}
+        <div className="mb-6 md:mb-12 space-y-1 md:space-y-2 animate-in fade-in slide-in-from-top-8 duration-1000">
+          <h1 className="text-3xl md:text-6xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-br from-white via-cyan-400 to-blue-600 drop-shadow-[0_0_20px_rgba(6,182,212,0.3)] px-4">
+            Welcome to OneClick Studio
+          </h1>
+          <p className="text-[8px] md:text-xs font-black uppercase tracking-[0.4em] text-slate-500 opacity-60">
+            Uplink initiated • AI Developer Interface
+          </p>
         </div>
-        <h2 className="text-xl font-bold tracking-widest uppercase text-slate-400">{isScanning ? 'Authenticating...' : 'Access Interface'}</h2>
+        <div 
+          onClick={!isScanning ? handleStartAuth : undefined}
+          className={`relative w-32 h-32 md:w-48 md:h-48 flex items-center justify-center cursor-pointer transition-transform active:scale-95 group mb-6 md:mb-12`}
+        >
+          <div className={`absolute inset-0 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all ${!isScanning ? 'animate-pulse' : ''}`}></div>
+          <Fingerprint 
+            size={isScanning ? 80 : 70} 
+            className={`${isScanning ? 'text-cyan-400 scale-110' : 'text-blue-600'} transition-all duration-500 relative z-10 drop-shadow-[0_0_25px_rgba(6,182,212,0.6)] ${!isScanning ? 'animate-[float_3s_ease-in-out_infinite]' : 'animate-pulse'}`} 
+          />
+          {isScanning && (
+            <div className="absolute top-0 left-0 w-full h-1 bg-cyan-400 shadow-[0_0_25px_#22d3ee] rounded-full animate-[scanning_1.5s_infinite] z-20"></div>
+          )}
+        </div>
+        <h2 className={`text-xs md:text-xl font-bold tracking-widest uppercase transition-colors duration-500 ${isScanning ? 'text-cyan-400' : 'text-slate-400'}`}>
+          {isScanning ? 'Identity Scanning...' : 'Touch sensor to access system'}
+        </h2>
       </div>
-      <style>{`@keyframes scanning { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }`}</style>
+      <style>{`
+        @keyframes scanning { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
+        @keyframes float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-15px) rotate(3deg); } }
+      `}</style>
     </div>
   );
 };
 
-const AuthPage: React.FC<{ onLoginSuccess: (user: UserType) => void }> = ({ onLoginSuccess }) => {
+// --- RESTORED AUTH PAGE ---
+const AuthPage: React.FC<{ onLoginSuccess: (user: UserType) => void, initialUpdateMode?: boolean }> = ({ onLoginSuccess, initialUpdateMode = false }) => {
   const [isRegister, setIsRegister] = useState(false);
-  const [formData, setFormData] = useState({ email: '', password: '', name: '' });
+  const [isResetting, setIsResetting] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(initialUpdateMode);
+  const [formData, setFormData] = useState({ email: '', password: '', name: '', confirmPassword: '' });
   const [isLoading, setIsLoading] = useState(false);
   const db = DatabaseService.getInstance();
 
@@ -97,24 +123,43 @@ const AuthPage: React.FC<{ onLoginSuccess: (user: UserType) => void }> = ({ onLo
     try {
       const res = isRegister ? await db.signUp(formData.email, formData.password, formData.name) : await db.signIn(formData.email, formData.password);
       if (res.error) throw res.error;
+      if (isRegister) {
+        alert("রেজিস্ট্রেশন সফল হয়েছে! ইমেইল চেক করুন।");
+        setIsRegister(false);
+        return;
+      }
       const userData = await db.getUser(formData.email, res.data.user?.id);
       if (userData) onLoginSuccess(userData);
-    } catch (e: any) { alert(e.message); } finally { setIsLoading(false); }
+    } catch (error: any) { alert(error.message); } finally { setIsLoading(false); }
   };
 
   return (
-    <div className="h-[100dvh] w-full flex items-center justify-center bg-[#0f172a] p-4">
-      <div className="glass-card p-10 rounded-[3rem] w-full max-w-md shadow-2xl animate-in zoom-in-95">
-        <h2 className="text-3xl font-black mb-8">{isRegister ? 'Create Account' : 'Login'}</h2>
-        <form onSubmit={handleAuth} className="space-y-4">
-          {isRegister && <input type="text" placeholder="Full Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white" required />}
-          <input type="email" placeholder="Email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white" required />
-          <input type="password" placeholder="Password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white" required />
-          <button disabled={isLoading} className="w-full py-4 bg-blue-600 rounded-2xl font-black uppercase text-sm hover:bg-blue-500 transition-all">
-            {isLoading ? <Loader2 className="animate-spin mx-auto"/> : (isRegister ? 'Register' : 'Login')}
-          </button>
-        </form>
-        <button onClick={() => setIsRegister(!isRegister)} className="mt-6 text-sm text-cyan-400 font-bold hover:underline">{isRegister ? 'Already have an account? Login' : 'No account? Register'}</button>
+    <div className="h-[100dvh] w-full flex flex-col items-center justify-start pt-6 md:justify-center md:pt-0 bg-[#0f172a] text-white relative overflow-hidden font-sans p-4">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent opacity-50"></div>
+      <div className="relative w-full max-w-[400px] h-[520px] md:h-[580px] [perspective:1200px] animate-in fade-in zoom-in-95 duration-500 mt-2 md:mt-0">
+        <div className={`relative w-full h-full transition-transform duration-1000 [transform-style:preserve-3d] ${isRegister ? '[transform:rotateY(-90deg)]' : ''}`}>
+          {/* LOGIN SIDE */}
+          <div className="absolute inset-0 [backface-visibility:hidden] bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-10 flex flex-col justify-center shadow-2xl [transform:translateZ(150px)] md:[transform:translateZ(200px)]">
+            <h2 className="text-2xl md:text-3xl font-black tracking-tight mb-8">System <span className="text-cyan-400">Login</span></h2>
+            <form onSubmit={handleAuth} className="space-y-4">
+              <input type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-white text-sm" placeholder="dev@oneclick.studio" />
+              <input type="password" required value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-white text-sm" placeholder="••••••••" />
+              <button disabled={isLoading} className="w-full py-4 bg-blue-600 rounded-2xl font-black uppercase text-sm">{isLoading ? <Loader2 className="animate-spin mx-auto"/> : 'Execute Login'}</button>
+            </form>
+            <button onClick={() => setIsRegister(true)} className="mt-4 text-xs text-cyan-400 font-bold hover:underline">No account? Create system entry</button>
+          </div>
+          {/* REGISTER SIDE */}
+          <div className="absolute inset-0 [backface-visibility:hidden] bg-blue-600/10 backdrop-blur-xl border border-blue-500/20 rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-10 flex flex-col justify-center shadow-2xl [transform:rotateY(90deg)_translateZ(150px)] md:[transform:rotateY(90deg)_translateZ(200px)]">
+            <h2 className="text-2xl md:text-3xl font-black mb-8 tracking-tight text-cyan-400">New <span className="text-white">Registry</span></h2>
+            <form onSubmit={handleAuth} className="space-y-4">
+              <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-white text-sm" placeholder="Full Name" />
+              <input type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-white text-sm" placeholder="Email" />
+              <input type="password" required value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-white text-sm" placeholder="••••••••" />
+              <button disabled={isLoading} className="w-full py-4 bg-cyan-500 text-black font-black uppercase text-sm">{isLoading ? <Loader2 className="animate-spin mx-auto"/> : 'Register Now'}</button>
+            </form>
+            <button onClick={() => setIsRegister(false)} className="mt-6 text-xs text-slate-400 font-bold hover:text-white">Already registered? Login instead</button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -145,7 +190,6 @@ const App: React.FC = () => {
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
 
   const gemini = useRef(new GeminiService());
-  const githubService = useRef(new GithubService());
   const db = DatabaseService.getInstance();
 
   useEffect(() => {
@@ -197,20 +241,20 @@ const App: React.FC = () => {
   };
 
   const handleApprove = async (txId: string) => {
-    if (!confirm("Approve this payment?")) return;
+    if (!confirm("Approve payment?")) return;
     try {
       await db.approveTransaction(txId);
       setPendingTransactions(prev => prev.filter(t => t.id !== txId));
-      alert("Tokens credited successfully!");
+      alert("Tokens credited!");
     } catch (e: any) { alert(e.message); }
   };
 
   const handleReject = async (txId: string) => {
-    if (!confirm("Reject this payment?")) return;
+    if (!confirm("Reject payment?")) return;
     try {
       await db.rejectTransaction(txId);
       setPendingTransactions(prev => prev.filter(t => t.id !== txId));
-      alert("Payment Rejected.");
+      alert("Rejected.");
     } catch (e: any) { alert(e.message); }
   };
 
@@ -219,10 +263,11 @@ const App: React.FC = () => {
     if (!isPurchasing || !user || !trxId) return;
     setPaymentStep('processing');
     try {
+      // Logic for inserting screenshot is here
       await db.submitPaymentRequest(user.id, isPurchasing.id, isPurchasing.price, selectedMethod, trxId, screenshot || undefined);
       setPaymentStep('success');
       setTimeout(() => { setIsPurchasing(null); setPaymentStep('method'); setTrxId(''); setScreenshot(null); }, 3000);
-    } catch (e: any) { alert("Failed: " + e.message); setPaymentStep('form'); }
+    } catch (e: any) { alert(e.message); setPaymentStep('form'); }
   };
 
   if (authLoading) return <div className="h-screen w-full flex items-center justify-center bg-[#020617] text-cyan-500"><Loader2 className="animate-spin" size={40}/></div>;
@@ -243,9 +288,7 @@ const App: React.FC = () => {
         <div className="flex items-center gap-4">
           {mode !== AppMode.ADMIN && (
             <>
-              <button onClick={() => github.token ? setBuildStatus('pushing') : alert("Configure GitHub first (3 clicks on logo)")} className="px-4 py-2 bg-blue-600 rounded-xl text-xs font-black uppercase shadow-lg flex items-center gap-2 hover:bg-blue-500 transition-all">
-                <Rocket size={16}/> Build APK
-              </button>
+              <button onClick={() => alert("Build APK initialized")} className="px-4 py-2 bg-blue-600 rounded-xl text-xs font-black uppercase shadow-lg flex items-center gap-2 hover:bg-blue-500 transition-all"><Rocket size={16}/> Build APK</button>
               <div className="px-4 py-2 bg-cyan-500/10 border border-cyan-500/20 rounded-full text-xs font-bold text-cyan-400">{user.tokens} Tokens</div>
             </>
           )}
@@ -255,96 +298,62 @@ const App: React.FC = () => {
 
       <main className="flex-1 flex overflow-hidden">
         {mode === AppMode.ADMIN ? (
-          <div className="flex-1 flex flex-col bg-[#020617] p-10 overflow-hidden">
-            <div className="flex items-center justify-between mb-10">
-               <div>
-                  <h1 className="text-4xl font-black tracking-tighter flex items-center gap-4"><ShieldCheck className="text-cyan-400" size={36}/> Admin <span className="text-cyan-400">Command Center</span></h1>
-                  <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em] mt-2">OneClick Studio Management v2.0</p>
+          <div className="flex-1 flex flex-col bg-[#020617] p-8 lg:p-12 overflow-hidden animate-in fade-in">
+             <div className="flex items-center justify-between mb-12">
+                <h1 className="text-4xl font-black tracking-tighter flex items-center gap-4"><ShieldCheck className="text-cyan-400" size={36}/> Admin <span className="text-cyan-400">Panel</span></h1>
+                <div className="flex gap-4">
+                   <button onClick={() => setAdminActiveTab('transactions')} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest ${adminActiveTab === 'transactions' ? 'bg-cyan-500 text-black' : 'bg-white/5 text-slate-500'}`}>Transactions</button>
+                   <button onClick={() => setAdminActiveTab('users')} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest ${adminActiveTab === 'users' ? 'bg-cyan-500 text-black' : 'bg-white/5 text-slate-500'}`}>Users</button>
+                </div>
+             </div>
+             
+             <div className="flex-1 overflow-y-auto custom-scroll">
+                {adminActiveTab === 'transactions' ? (
+                   <div className="grid gap-6">
+                      {pendingTransactions.map(tx => (
+                        <div key={tx.id} className="glass-card p-6 rounded-[2.5rem] border-white/5 flex flex-col md:flex-row items-center gap-8 group hover:border-cyan-500/20 transition-all">
+                           <div className="flex-1 min-w-0">
+                              <h3 className="text-lg font-black truncate">{tx.user_email}</h3>
+                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{new Date(tx.created_at).toLocaleString()}</p>
+                              <p className="text-xs font-mono text-cyan-400 mt-1">TrxID: {tx.trx_id}</p>
+                           </div>
+                           <div className="text-center px-6 border-x border-white/5 min-w-[120px]">
+                              <p className="text-2xl font-black">৳{tx.amount}</p>
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${tx.payment_method === 'bkash' ? 'bg-[#E2136E]' : 'bg-[#F7941D]'}`}>{tx.payment_method}</span>
+                           </div>
+                           <div className="shrink-0">
+                              {tx.screenshot_url ? (
+                                 <button onClick={() => setViewingScreenshot(tx.screenshot_url || null)} className="relative group/shot">
+                                    <img src={tx.screenshot_url} className="w-16 h-16 object-cover rounded-xl border border-white/10" alt="Proof"/>
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/shot:opacity-100 flex items-center justify-center rounded-xl"><Search size={16}/></div>
+                                 </button>
+                              ) : <AlertCircle className="text-slate-700"/>}
+                           </div>
+                           <div className="flex gap-2">
+                              <button onClick={() => handleReject(tx.id)} className="p-4 bg-red-500/10 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all"><XCircle size={20}/></button>
+                              <button onClick={() => handleApprove(tx.id)} className="p-4 bg-green-500/10 text-green-500 rounded-2xl hover:bg-green-500 hover:text-white transition-all"><CheckCircle2 size={20}/></button>
+                           </div>
+                        </div>
+                      ))}
+                      {pendingTransactions.length === 0 && <p className="text-center text-slate-600 uppercase font-black tracking-widest py-20">No pending tasks</p>}
+                   </div>
+                ) : <div className="text-center py-20 opacity-20"><Users size={60} className="mx-auto mb-4"/><p className="font-black uppercase tracking-widest">User Management Module</p></div>}
+             </div>
+
+             {viewingScreenshot && (
+               <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 animate-in fade-in" onClick={() => setViewingScreenshot(null)}>
+                  <img src={viewingScreenshot} className="max-h-[85vh] rounded-3xl shadow-2xl border border-white/10" alt="Full Proof"/>
+                  <button className="absolute top-10 right-10 p-4 bg-white/10 rounded-full"><X size={32}/></button>
                </div>
-               <div className="flex gap-4 bg-slate-900/50 p-1.5 rounded-2xl border border-white/5">
-                  <button onClick={() => setAdminActiveTab('transactions')} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminActiveTab === 'transactions' ? 'bg-cyan-500 text-black shadow-xl' : 'text-slate-500 hover:text-white'}`}>Payments</button>
-                  <button onClick={() => setAdminActiveTab('users')} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminActiveTab === 'users' ? 'bg-cyan-500 text-black shadow-xl' : 'text-slate-500 hover:text-white'}`}>User Base</button>
-                  <button onClick={() => setAdminActiveTab('tickets')} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminActiveTab === 'tickets' ? 'bg-cyan-500 text-black shadow-xl' : 'text-slate-500 hover:text-white'}`}>Support</button>
-               </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto pr-2 custom-scroll">
-               {adminActiveTab === 'transactions' ? (
-                 <div className="grid gap-4 pb-20">
-                   {pendingTransactions.length === 0 ? (
-                      <div className="h-60 flex flex-col items-center justify-center glass-card rounded-[3rem] border-dashed border-white/5 opacity-50"><CheckCircle2 size={40} className="mb-4"/><p className="text-xs font-black uppercase tracking-widest">No pending tasks</p></div>
-                   ) : (
-                     pendingTransactions.map((tx) => (
-                       <div key={tx.id} className="glass-card p-6 rounded-[2.5rem] border-white/5 flex flex-col md:flex-row items-center gap-8 group hover:border-cyan-500/20 transition-all animate-in fade-in slide-in-from-left-4">
-                          <div className="flex items-center gap-6 flex-1 min-w-0">
-                             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-white shrink-0 ${tx.payment_method === 'bkash' ? 'bg-[#E2136E]' : 'bg-[#F7941D]'}`}>{tx.payment_method[0].toUpperCase()}</div>
-                             <div className="truncate">
-                                <h3 className="text-lg font-black text-white truncate">{tx.user_email}</h3>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">{new Date(tx.created_at).toLocaleString()}</p>
-                                <p className="text-xs font-mono text-cyan-400 mt-1">TrxID: <span className="text-white select-all">{tx.trx_id}</span></p>
-                             </div>
-                          </div>
-                          
-                          <div className="text-center md:text-right px-6 border-x border-white/5 min-w-[120px]">
-                             <p className="text-2xl font-black text-white">৳{tx.amount}</p>
-                             <p className="text-[9px] font-bold text-slate-500 uppercase">Package Amt</p>
-                          </div>
-
-                          <div className="relative group/shot shrink-0">
-                             {tx.screenshot_url ? (
-                                <img 
-                                   src={tx.screenshot_url} 
-                                   onClick={() => setViewingScreenshot(tx.screenshot_url || null)}
-                                   className="w-16 h-20 object-cover rounded-xl border border-white/10 cursor-zoom-in transition-transform group-hover/shot:scale-110 active:scale-95" 
-                                   alt="Proof"
-                                />
-                             ) : (
-                                <div className="w-16 h-20 bg-white/5 rounded-xl flex items-center justify-center text-slate-700"><AlertCircle size={20}/></div>
-                             )}
-                          </div>
-
-                          <div className="flex gap-2">
-                             <button onClick={() => handleReject(tx.id)} className="p-4 bg-red-500/10 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all active:scale-90"><XCircle size={20}/></button>
-                             <button onClick={() => handleApprove(tx.id)} className="p-4 bg-green-500/10 text-green-500 rounded-2xl hover:bg-green-500 hover:text-white transition-all active:scale-90"><CheckCircle2 size={20}/></button>
-                          </div>
-                       </div>
-                     ))
-                   )}
-                 </div>
-               ) : adminActiveTab === 'users' ? (
-                 <div className="glass-card rounded-[3rem] border-white/5 overflow-hidden animate-in fade-in">
-                    <table className="w-full text-left">
-                       <thead className="bg-white/5 border-b border-white/5"><tr className="text-[10px] font-black uppercase text-slate-500 tracking-widest"><th className="px-8 py-5">User Account</th><th className="px-8 py-5">Wallet</th><th className="px-8 py-5">Status</th><th className="px-8 py-5">Action</th></tr></thead>
-                       <tbody className="divide-y divide-white/5">
-                          <tr className="hover:bg-white/5 transition-colors">
-                             <td className="px-8 py-6"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center font-bold">U</div><div><p className="font-black text-white">All System Users</p><p className="text-[9px] text-slate-500">Total Clients: 99+</p></div></div></td>
-                             <td className="px-8 py-6 text-cyan-400 font-bold">-- Tokens</td>
-                             <td className="px-8 py-6"><span className="px-3 py-1 bg-green-500/10 text-green-500 rounded-full text-[9px] font-black uppercase">Active Access</span></td>
-                             <td className="px-8 py-6"><button className="p-2 text-slate-500 hover:text-white"><Settings size={16}/></button></td>
-                          </tr>
-                       </tbody>
-                    </table>
-                 </div>
-               ) : (
-                 <div className="flex flex-col items-center justify-center h-full opacity-20"><MessageSquare size={60} className="mb-4"/><p className="text-sm font-black uppercase tracking-widest">No active tickets</p></div>
-               )}
-            </div>
-
-            {viewingScreenshot && (
-              <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
-                 <button onClick={() => setViewingScreenshot(null)} className="absolute top-10 right-10 p-4 bg-white/10 rounded-full text-white"><X size={32}/></button>
-                 <img src={viewingScreenshot} className="max-h-[85vh] w-auto rounded-[2rem] shadow-2xl border border-white/10" alt="Full Proof" />
-              </div>
-            )}
+             )}
           </div>
         ) : mode === AppMode.SHOP ? (
-          <div className="flex-1 p-20 overflow-y-auto relative animate-in slide-in-from-top-4">
+          <div className="flex-1 p-20 overflow-y-auto animate-in slide-in-from-top-4 relative">
              <div className="max-w-6xl mx-auto">
                 <div className="text-center mb-16"><h1 className="text-6xl font-black mb-4 tracking-tighter">Token <span className="text-cyan-400">Vault</span></h1><p className="text-slate-400 text-lg">প্যাকেজ কিনুন এবং এআই ক্ষমতা বাড়িয়ে নিন</p></div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                   {packages.map((pkg) => (
-                    <div key={pkg.id} className={`glass-card p-12 rounded-[4rem] border-white/10 relative transition-all hover:scale-[1.03] group ${pkg.is_popular ? 'border-cyan-500/40 bg-cyan-500/5' : ''}`}>
-                      <div className="mb-6 p-4 bg-white/5 w-fit rounded-2xl group-hover:text-cyan-400 transition-colors">{pkg.icon === 'Rocket' ? <Rocket/> : <Cpu/>}</div>
+                    <div key={pkg.id} className="glass-card p-12 rounded-[4rem] border-white/10 relative transition-all hover:scale-[1.03]">
                       <h3 className="text-2xl font-black mb-2">{pkg.name}</h3>
                       <div className="text-6xl font-black text-white mb-6 mt-8 tracking-tighter">{pkg.tokens} <span className="text-lg opacity-20 ml-1">UNIT</span></div>
                       <button onClick={() => setIsPurchasing(pkg)} className="w-full py-4 bg-white/5 border border-white/10 rounded-3xl font-black text-lg hover:bg-cyan-500 hover:text-black transition-all">৳ {pkg.price}</button>
@@ -354,48 +363,38 @@ const App: React.FC = () => {
              </div>
              {isPurchasing && (
                <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[100] flex items-center justify-center p-6">
-                 <div className="max-w-md w-full glass-card p-10 rounded-[3rem] border-white/10 animate-in zoom-in-95 shadow-2xl overflow-y-auto max-h-[90vh]">
+                 <div className="max-w-md w-full glass-card p-10 rounded-[3rem] border-white/10 animate-in zoom-in-95 shadow-2xl">
                     {paymentStep === 'method' ? (
                       <div className="space-y-8">
-                        <div className="text-center mb-4"><h2 className="text-3xl font-black">Checkout</h2><p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-2">পেমেন্ট মেথড সিলেক্ট করুন</p></div>
+                        <div className="text-center"><h2 className="text-3xl font-black">Checkout</h2><p className="text-slate-500 uppercase font-black text-[10px] mt-2 tracking-widest">Select Method</p></div>
                         <div className="grid grid-cols-2 gap-4">
-                          <button onClick={() => {setSelectedMethod('bkash'); setPaymentStep('form');}} className="h-24 bg-[#E2136E] rounded-2xl flex flex-col items-center justify-center shadow-xl hover:scale-105 transition-all text-white font-black uppercase text-xs">bKash</button>
-                          <button onClick={() => {setSelectedMethod('nagad'); setPaymentStep('form');}} className="h-24 bg-[#F7941D] rounded-2xl flex flex-col items-center justify-center shadow-xl hover:scale-105 transition-all text-white font-black uppercase text-xs">Nagad</button>
+                          <button onClick={() => {setSelectedMethod('bkash'); setPaymentStep('form');}} className="h-20 bg-[#E2136E] rounded-2xl flex items-center justify-center text-white font-black uppercase text-xs">bKash</button>
+                          <button onClick={() => {setSelectedMethod('nagad'); setPaymentStep('form');}} className="h-20 bg-[#F7941D] rounded-2xl flex items-center justify-center text-white font-black uppercase text-xs">Nagad</button>
                         </div>
-                        <button onClick={() => setIsPurchasing(null)} className="w-full text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] hover:text-white">Cancel</button>
+                        <button onClick={() => setIsPurchasing(null)} className="w-full text-slate-500 text-xs font-black uppercase">Cancel</button>
                       </div>
                     ) : paymentStep === 'form' ? (
                       <form onSubmit={handleSubmitPayment} className="space-y-6">
-                        <div className="text-center space-y-2"><h2 className="text-2xl font-black">Verification</h2><p className="text-cyan-400 font-bold text-xs uppercase tracking-widest">টাকা পাঠিয়ে TrxID দিন</p></div>
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
-                           <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Send Money to (Personal)</p>
-                           <p className="text-2xl font-black text-white tracking-widest">017XXXXXXXX</p>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Transaction ID</label>
-                          <input type="text" required value={trxId} onChange={e => setTrxId(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 outline-none focus:border-cyan-500/50 transition-all text-sm font-mono" placeholder="ABC123XYZ" />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-2">Upload Screenshot</label>
-                          <div className="relative group border-2 border-dashed border-white/10 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-cyan-500/30 transition-all overflow-hidden">
-                             <input type="file" accept="image/*" onChange={e => {
+                        <h2 className="text-2xl font-black text-center">Payment Verification</h2>
+                        <input type="text" required value={trxId} onChange={e => setTrxId(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-mono" placeholder="Transaction ID (TrxID)" />
+                        <div className="relative border-2 border-dashed border-white/10 rounded-xl p-6 flex flex-col items-center cursor-pointer">
+                           <input type="file" accept="image/*" onChange={e => {
                                const file = e.target.files?.[0];
                                if (file) {
                                   const reader = new FileReader();
                                   reader.onloadend = () => setScreenshot(reader.result as string);
                                   reader.readAsDataURL(file);
                                }
-                             }} className="absolute inset-0 opacity-0 cursor-pointer" />
-                             {screenshot ? <img src={screenshot} className="w-full aspect-video object-cover rounded-lg" alt="Preview"/> : <><Upload className="text-slate-500 mb-2 group-hover:text-cyan-400 transition-colors" size={24}/><p className="text-[9px] text-slate-500 font-bold uppercase">Click to upload image</p></>}
-                          </div>
+                           }} className="absolute inset-0 opacity-0 cursor-pointer" />
+                           {screenshot ? <img src={screenshot} className="w-full h-32 object-cover rounded-lg" alt="Proof"/> : <><Upload className="text-slate-500 mb-2" size={24}/><p className="text-[9px] text-slate-500 font-bold">Upload Screenshot</p></>}
                         </div>
-                        <button type="submit" className="w-full py-4 bg-cyan-600 rounded-xl font-black uppercase tracking-widest text-sm shadow-xl hover:bg-cyan-500 transition-all">Submit Request</button>
-                        <button type="button" onClick={() => setPaymentStep('method')} className="w-full text-slate-500 text-[9px] font-bold uppercase tracking-widest hover:text-white">Back</button>
+                        <button type="submit" className="w-full py-4 bg-cyan-600 rounded-xl font-black uppercase text-sm">Submit Request</button>
+                        <button type="button" onClick={() => setPaymentStep('method')} className="w-full text-slate-500 text-[9px] font-bold uppercase">Back</button>
                       </form>
                     ) : paymentStep === 'processing' ? (
-                      <div className="text-center py-20 space-y-8"><Loader2 className="animate-spin mx-auto text-cyan-500" size={40}/><h2 className="text-2xl font-black animate-pulse text-white">Submitting...</h2></div>
+                      <div className="text-center py-20"><Loader2 className="animate-spin mx-auto text-cyan-500 mb-4" size={40}/><h2 className="text-xl font-black">Submitting...</h2></div>
                     ) : (
-                      <div className="text-center py-20 space-y-8"><div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mx-auto text-white shadow-[0_0_40px_rgba(34,197,94,0.4)] animate-bounce"><Check size={50}/></div><h2 className="text-3xl font-black text-white">Request Sent!</h2></div>
+                      <div className="text-center py-20"><CheckCircle2 className="mx-auto text-green-500 mb-4" size={40}/><h2 className="text-xl font-black">Request Sent!</h2></div>
                     )}
                  </div>
                </div>
@@ -416,8 +415,7 @@ const App: React.FC = () => {
               </div>
             </section>
             <section className="flex-1 flex flex-col bg-[#020617] h-full items-center justify-center p-10 relative">
-              <div className="absolute inset-0 bg-grid opacity-20 pointer-events-none"></div>
-              <div className="bg-slate-900 rounded-[4.5rem] h-[780px] w-full max-w-[380px] border-[14px] border-slate-800 shadow-[0_0_100px_rgba(0,0,0,0.8)] relative overflow-hidden group"><iframe key={projectFiles['index.html']} srcDoc={projectFiles['index.html'] || ''} title="preview" className="w-full h-full border-none bg-white" /></div>
+              <div className="bg-slate-900 rounded-[4.5rem] h-[780px] w-full max-w-[380px] border-[14px] border-slate-800 shadow-2xl relative overflow-hidden group"><iframe key={projectFiles['index.html']} srcDoc={projectFiles['index.html'] || ''} title="preview" className="w-full h-full border-none bg-white" /></div>
             </section>
           </div>
         ) : mode === AppMode.EDIT ? (
@@ -435,6 +433,18 @@ const App: React.FC = () => {
         ) : mode === AppMode.PROFILE ? (
           <div className="flex-1 flex items-center justify-center p-20">
             <div className="max-w-md w-full glass-card p-16 rounded-[5.5rem] text-center border-white/10 shadow-2xl animate-in fade-in zoom-in-95"><div className="w-36 h-36 rounded-[3.5rem] border-4 border-cyan-500 mx-auto mb-10 p-1.5 bg-[#0f172a] overflow-hidden"><img src={user.avatar_url} className="w-full h-full object-cover" alt="Profile"/></div><h2 className="text-4xl font-black mb-3">{user.name}</h2><p className="text-cyan-400/50 text-sm font-bold mb-12">{user.email}</p><div className="bg-slate-900/80 p-12 rounded-[4rem] border border-white/5"><p className="text-[9px] uppercase font-black opacity-20 mb-2">Neural Tokens</p><p className="text-7xl font-black text-white">{user.tokens}</p></div></div>
+          </div>
+        ) : mode === AppMode.SETTINGS ? (
+          <div className="flex-1 flex items-center justify-center p-20">
+            <div className="max-w-md w-full glass-card p-12 rounded-[4rem] border-white/10 shadow-2xl animate-in zoom-in-95">
+              <div className="text-center mb-10"><h2 className="text-3xl font-black mb-2">GitHub <span className="text-cyan-400">Config</span></h2></div>
+              <div className="space-y-4">
+                <input type="password" value={github.token} onChange={e => setGithub({...github, token: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm" placeholder="Token" />
+                <input type="text" value={github.owner} onChange={e => setGithub({...github, owner: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm" placeholder="Owner" />
+                <input type="text" value={github.repo} onChange={e => setGithub({...github, repo: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm" placeholder="Repo" />
+                <button onClick={() => setMode(AppMode.PREVIEW)} className="w-full py-4 bg-cyan-600 rounded-xl font-black uppercase text-sm mt-4">Save & Exit</button>
+              </div>
+            </div>
           </div>
         ) : null}
       </main>

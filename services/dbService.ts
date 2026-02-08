@@ -80,16 +80,6 @@ export class DatabaseService {
     }
   }
 
-  async resetPassword(email: string) {
-    return await this.supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: `${window.location.origin}/update-password`,
-    });
-  }
-
-  async updatePassword(newPassword: string) {
-    return await this.supabase.auth.updateUser({ password: newPassword });
-  }
-
   async getUser(email: string, id?: string): Promise<User | null> {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail && !id) return null;
@@ -145,7 +135,6 @@ export class DatabaseService {
   }
 
   async submitPaymentRequest(userId: string, pkgId: string, amount: number, method: string, trxId: string, screenshot?: string): Promise<boolean> {
-    // Ensure data is treated as high-priority insertion
     const { data, error } = await this.supabase.from('transactions').insert({
       user_id: userId,
       package_id: pkgId,
@@ -156,10 +145,7 @@ export class DatabaseService {
       screenshot_url: screenshot || null
     }).select();
     
-    if (error) {
-      console.error("Payment Submission Error:", error);
-      throw new Error("আপনার ট্রানজ্যাকশন ডাটাবেসে সেভ করা যায়নি। স্ক্রিনশট সাইজ ছোট করে ট্রাই করুন।");
-    }
+    if (error) throw error;
     return !!data;
   }
 
@@ -170,10 +156,7 @@ export class DatabaseService {
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error("Admin Fetch Error:", error);
-      return [];
-    }
+    if (error) return [];
     return (data as any[]).map(t => ({
         ...t,
         user_email: t.users?.email || 'Unknown User'
