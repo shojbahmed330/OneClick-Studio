@@ -273,6 +273,7 @@ const AuthPage: React.FC<{ onLoginSuccess: (user: UserType) => void, initialUpda
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserType | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [path, setPath] = useState(window.location.pathname);
   const [mode, setMode] = useState<AppMode>(AppMode.PREVIEW);
   const [mobileSubMode, setMobileSubMode] = useState<'chat' | 'preview'>('chat');
@@ -304,23 +305,28 @@ const App: React.FC = () => {
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
 
+  // Listen for Auth Changes (Essential for Google Login redirects)
   useEffect(() => {
-    const checkAuth = async () => {
-      const session = await db.getCurrentSession();
+    const { data: { subscription } } = db.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         const isRecovery = window.location.hash.includes('type=recovery') || path === '/update-password';
-        const userData = await db.getUser(session.user.email || '');
+        const userData = await db.getUser(session.user.email || '', session.user.id);
         if (userData && !isRecovery) {
           setUser(userData);
           if (path === '/login' || path === '/' || !path) {
             navigate('/dashboard');
           }
         }
-      } else if (path === '/dashboard') {
-        navigate('/login');
+      } else {
+        if (path === '/dashboard') {
+          navigate('/login');
+        }
+        setUser(null);
       }
-    };
-    checkAuth();
+      setAuthLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, [path]);
 
   const navigate = (to: string) => {
@@ -473,6 +479,19 @@ const App: React.FC = () => {
     if (type === 'single') setSelectedOptions([val]);
     else if (type === 'multiple') setSelectedOptions(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
   };
+
+  // Auth Loading Screen (Neural Link Establishing)
+  if (authLoading) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-[#020617] text-cyan-500 font-sans p-4">
+        <div className="relative w-24 h-24 mb-8">
+           <div className="absolute inset-0 rounded-full border-4 border-cyan-500/20 border-t-cyan-500 animate-spin"></div>
+           <Cpu size={40} className="absolute inset-0 m-auto animate-pulse" />
+        </div>
+        <h2 className="text-[10px] md:text-xs font-black uppercase tracking-[0.4em] animate-pulse">Neural Link Establishing...</h2>
+      </div>
+    );
+  }
 
   if (!user) {
     const isRecovery = path === '/update-password' || window.location.hash.includes('type=recovery');
