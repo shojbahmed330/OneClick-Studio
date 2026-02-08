@@ -122,28 +122,18 @@ const AuthPage: React.FC<{ onLoginSuccess: (user: UserType) => void, initialUpda
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    try {
-      const { error } = await db.loginWithGoogle();
-      if (error) throw error;
-    } catch (error: any) {
-      alert(error.message || "Google Login Failed");
-      setIsLoading(false);
-    }
-  };
-
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.email) return alert("দয়া করে ইমেইল দিন।");
+    if (!formData.email) return alert("Please enter your email.");
     setIsLoading(true);
     try {
       const { error } = await db.resetPassword(formData.email);
       if (error) throw error;
-      alert("আপনার ইমেইলে পাসওয়ার্ড রিসেট লিঙ্ক পাঠানো হয়েছে।");
+      // Requested Message
+      alert("A password reset link has been sent to your email. Please check your inbox and follow the instructions to reset your password.");
       setIsResetting(false);
     } catch (error: any) {
-      alert(error.message || "পাসওয়ার্ড রিসেট লিঙ্ক পাঠাতে সমস্যা হয়েছে।");
+      alert(error.message || "Failed to send reset link.");
     } finally {
       setIsLoading(false);
     }
@@ -151,18 +141,23 @@ const AuthPage: React.FC<{ onLoginSuccess: (user: UserType) => void, initialUpda
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.password !== formData.confirmPassword) return alert("পাসওয়ার্ড দুটি মিলছে না।");
+    if (!formData.password) return alert("Please enter a new password.");
+    if (formData.password !== formData.confirmPassword) return alert("Passwords do not match!");
+    
     setIsLoading(true);
     try {
       const { error } = await db.updatePassword(formData.password);
       if (error) throw error;
       
       await db.signOut();
-      alert("পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে। এখন আপনার নতুন পাসওয়ার্ড দিয়ে লগইন করুন।");
+      // Requested Message
+      alert("Password successfully changed.");
       setIsUpdatingPassword(false);
       window.location.hash = ''; 
+      // Redirect to login
+      window.location.href = window.location.origin + '/login';
     } catch (error: any) {
-      alert(error.message || "পাসওয়ার্ড আপডেট করতে সমস্যা হয়েছে।");
+      alert(error.message || "Failed to update password.");
     } finally {
       setIsLoading(false);
     }
@@ -245,8 +240,6 @@ const AuthPage: React.FC<{ onLoginSuccess: (user: UserType) => void, initialUpda
                   <button disabled={isLoading} className="w-full py-4 bg-blue-600 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl hover:bg-blue-500 transition-all active:scale-95 flex items-center justify-center gap-2">
                     {isLoading ? <Loader2 className="animate-spin" /> : 'Execute Login'}
                   </button>
-                  <div className="flex items-center gap-4 py-2"><hr className="flex-1 opacity-10 border-white"/><span className="text-[9px] font-black opacity-30 tracking-[0.2em]">IDENTITY PROVIDER</span><hr className="flex-1 opacity-10 border-white"/></div>
-                  <button type="button" onClick={handleGoogleLogin} disabled={isLoading} className="w-full py-3.5 bg-white/5 border border-white/10 rounded-2xl font-bold text-xs flex items-center justify-center gap-3 hover:bg-white/10 transition-all active:scale-95"><Globe size={18} className="text-cyan-400"/>Continue with Google Access</button>
                 </form>
                 <button onClick={() => setIsRegister(true)} className="mt-4 text-xs text-cyan-400 font-bold hover:underline">No account? Create system entry</button>
               </div>
@@ -304,7 +297,6 @@ const App: React.FC = () => {
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
 
-  // Robust Auth handling with Retry mechanism for slow DB triggers
   useEffect(() => {
     let mounted = true;
     let retryCount = 0;
@@ -333,13 +325,12 @@ const App: React.FC = () => {
       const success = await fetchUserProfile(email, id);
       if (!success && retryCount < MAX_RETRIES) {
         retryCount++;
-        setTimeout(() => attemptLogin(email, id), 1500); // Retry every 1.5s
+        setTimeout(() => attemptLogin(email, id), 1500); 
       } else {
         if (mounted) setAuthLoading(false);
       }
     };
 
-    // 1. Initial Session Check
     const checkSession = async () => {
       try {
         const session = await db.getCurrentSession();
@@ -354,12 +345,11 @@ const App: React.FC = () => {
     };
     checkSession();
 
-    // 2. Auth State Listener (Handles Redirects)
     const { data: { subscription } } = db.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       
       if (session?.user) {
-        retryCount = 0; // Reset for new sign in
+        retryCount = 0; 
         await attemptLogin(session.user.email || '', session.user.id);
       } else {
         setUser(null);
@@ -367,7 +357,6 @@ const App: React.FC = () => {
       }
     });
 
-    // 3. Safety Timeout (Never stay stuck more than 10 seconds)
     const safetyTimer = setTimeout(() => {
       if (mounted && authLoading) setAuthLoading(false);
     }, 10000);
@@ -530,7 +519,6 @@ const App: React.FC = () => {
     else if (type === 'multiple') setSelectedOptions(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
   };
 
-  // Auth Loading Screen (Neural Link Establishing)
   if (authLoading) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-[#020617] text-cyan-500 font-sans p-4">

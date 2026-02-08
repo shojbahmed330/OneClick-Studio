@@ -139,19 +139,6 @@ export class DatabaseService {
     }
   }
 
-  async loginWithGoogle() {
-    try {
-      return await this.supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { 
-          redirectTo: window.location.origin
-        }
-      });
-    } catch (error: any) {
-      throw new Error("গুগল লগইন এরর: " + error.message);
-    }
-  }
-
   async resetPassword(email: string) {
     return await this.supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
       redirectTo: `${window.location.origin}/update-password`,
