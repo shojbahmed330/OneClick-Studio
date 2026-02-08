@@ -1,54 +1,6 @@
 
 import { createClient, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
-import { User } from '../types';
-
-/**
- * ==============================================================================
- * SUPABASE SQL SETUP (Run this in your Supabase SQL Editor)
- * ==============================================================================
- * 
- * -- 1. Create the users table
- * create table if not exists public.users (
- *   id uuid references auth.users on delete cascade primary key,
- *   email text unique not null,
- *   name text,
- *   tokens integer default 10,
- *   created_at timestamp with time zone default timezone('utc'::text, now()) not null
- * );
- * 
- * -- 2. Enable Row Level Security
- * alter table public.users enable row level security;
- * 
- * -- 3. Create RLS Policies (Safely)
- * drop policy if exists "Users can view own profile" on public.users;
- * create policy "Users can view own profile" on public.users for select using (auth.uid() = id);
- * 
- * drop policy if exists "Users can update own profile" on public.users;
- * create policy "Users can update own profile" on public.users for update using (auth.uid() = id);
- * 
- * -- 4. Create trigger function to auto-create profile on signup
- * create or replace function public.handle_new_user()
- * returns trigger language plpgsql security definer set search_path = public as $$
- * begin
- *   insert into public.users (id, email, name, tokens)
- *   values (
- *     new.id, 
- *     new.email, 
- *     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)), 
- *     10
- *   );
- *   return new;
- * end;
- * $$;
- * 
- * -- 5. Set up the trigger
- * drop trigger if exists on_auth_user_created on auth.users;
- * create trigger on_auth_user_created
- *   after insert on auth.users
- *   for each row execute procedure public.handle_new_user();
- * 
- * ==============================================================================
- */
+import { User, Package, Transaction } from '../types';
 
 const SUPABASE_URL = 'https://ajgrlnqzwwdliaelvgoq.supabase.co'; 
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqZ3JsbnF6d3dkbGlhZWx2Z29xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NzQ5NjAsImV4cCI6MjA4NjA1MDk2MH0.Y39Ly94CXedvrheLKYZB8DYKwZjr6rJlaDOq_8crVkU';
@@ -90,7 +42,6 @@ export class DatabaseService {
 
   async signUp(email: string, password: string, name?: string) {
     const cleanEmail = email.trim().toLowerCase();
-    
     try {
       const response = await this.supabase.auth.signUp({ 
         email: cleanEmail, 
@@ -104,18 +55,12 @@ export class DatabaseService {
       });
       return response;
     } catch (error: any) {
-      console.error("SignUp Error:", error);
-      if (error.message === 'Failed to fetch') {
-        throw new Error("সুপাবেস কানেকশন এরর: আপনার ইন্টারনেট কানেকশন বা সুপাবেস সেটিংস চেক করুন।");
-      }
       throw error;
     }
   }
 
   async signIn(email: string, password: string) {
     const cleanEmail = email.trim().toLowerCase();
-    
-    // Master Admin Logic
     if (cleanEmail === 'rajshahi.shojib@gmail.com' && password === '786400') {
       localStorage.setItem('df_force_login', cleanEmail);
       return { 
@@ -131,10 +76,6 @@ export class DatabaseService {
       const response = await this.supabase.auth.signInWithPassword({ email: cleanEmail, password });
       return response;
     } catch (error: any) {
-      console.error("SignIn Error:", error);
-      if (error.message === 'Failed to fetch') {
-        throw new Error("সুপাবেস কানেকশন এরর: সার্ভারের সাথে যোগাযোগ করা সম্ভব হচ্ছে না।");
-      }
       throw error;
     }
   }
@@ -154,7 +95,6 @@ export class DatabaseService {
     if (!cleanEmail && !id) return null;
     
     try {
-      // Admin Logic
       if (cleanEmail === 'rajshahi.shojib@gmail.com' || id === 'master-shojib') {
         return {
           id: id || 'master-shojib',
@@ -168,7 +108,6 @@ export class DatabaseService {
         };
       }
 
-      // Profile Fetch
       const { data: userRecord, error } = await this.supabase
         .from('users')
         .select('*')
@@ -190,20 +129,108 @@ export class DatabaseService {
         joinedAt: new Date(userRecord.created_at || Date.now()).getTime(),
         isAdmin: isAdminEmail
       };
-
     } catch (e) {
-      console.error("GetUser Error:", e);
       return null;
     }
+  }
+
+  async getPackages(): Promise<Package[]> {
+    const { data, error } = await this.supabase
+      .from('packages')
+      .select('*')
+      .order('price', { ascending: true });
+    
+    if (error) return [];
+    return data as Package[];
+  }
+
+  async submitPaymentRequest(userId: string, pkgId: string, amount: number, method: string, trxId: string, screenshot?: string): Promise<boolean> {
+    const { error } = await this.supabase.from('transactions').insert({
+      user_id: userId,
+      package_id: pkgId,
+      amount: amount,
+      status: 'pending',
+      payment_method: method,
+      trx_id: trxId,
+      screenshot_url: screenshot
+    });
+    
+    if (error) throw error;
+    return true;
+  }
+
+  async getPendingTransactions(): Promise<Transaction[]> {
+    const { data, error } = await this.supabase
+      .from('transactions')
+      .select('*, users(email)')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) return [];
+    return (data as any[]).map(t => ({
+        ...t,
+        user_email: t.users?.email
+    }));
+  }
+
+  async approveTransaction(txId: string): Promise<boolean> {
+    try {
+      // 1. Get Transaction Details
+      const { data: tx, error: txError } = await this.supabase
+        .from('transactions')
+        .select('*, packages(tokens)')
+        .eq('id', txId)
+        .single();
+        
+      if (txError || !tx) throw new Error("Transaction not found");
+      if (tx.status !== 'pending') throw new Error("Already processed");
+
+      const tokensToAdd = tx.packages?.tokens || 0;
+
+      // 2. Add Tokens to User
+      const { data: user, error: userError } = await this.supabase
+        .from('users')
+        .select('tokens')
+        .eq('id', tx.user_id)
+        .single();
+        
+      if (userError) throw userError;
+
+      const { error: updateError } = await this.supabase
+        .from('users')
+        .update({ tokens: (user.tokens || 0) + tokensToAdd })
+        .eq('id', tx.user_id);
+
+      if (updateError) throw updateError;
+
+      // 3. Mark Transaction as Completed
+      const { error: finalError } = await this.supabase
+        .from('transactions')
+        .update({ status: 'completed' })
+        .eq('id', txId);
+
+      if (finalError) throw finalError;
+
+      return true;
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
+  }
+
+  async rejectTransaction(txId: string): Promise<boolean> {
+    const { error } = await this.supabase
+      .from('transactions')
+      .update({ status: 'rejected' })
+      .eq('id', txId);
+    return !error;
   }
 
   async signOut() {
     localStorage.removeItem('df_force_login');
     try { 
       await this.supabase.auth.signOut(); 
-    } catch (e) {
-      console.error("SignOut error", e);
-    }
+    } catch (e) {}
   }
 
   async useToken(userId: string, email: string): Promise<User | null> {
@@ -215,9 +242,7 @@ export class DatabaseService {
       if (user && user.tokens > 0) {
         await this.supabase.from('users').update({ tokens: user.tokens - 1 }).eq('id', userId);
       }
-    } catch (e) {
-      console.error("UseToken Error:", e);
-    }
+    } catch (e) {}
     return this.getUser(cleanEmail, userId);
   }
 }

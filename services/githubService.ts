@@ -169,6 +169,29 @@ jobs:
     }
   }
 
+  async getRunDetails(config: GithubConfig) {
+    const token = config.token.trim();
+    const owner = config.owner.trim();
+    const repo = config.repo.trim();
+    const headers = { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' };
+    
+    try {
+      const runsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs?per_page=1`, { headers });
+      if (!runsRes.ok) return null;
+      const runsData = await runsRes.json();
+      const latestRun = runsData.workflow_runs?.[0];
+      if (!latestRun) return null;
+
+      const jobsRes = await fetch(latestRun.jobs_url, { headers });
+      if (!jobsRes.ok) return { run: latestRun, jobs: [] };
+      const jobsData = await jobsRes.json();
+      return { run: latestRun, jobs: jobsData.jobs || [] };
+    } catch (e) {
+      console.error("getRunDetails error:", e);
+      return null;
+    }
+  }
+
   async getLatestApk(config: GithubConfig) {
     const token = config.token.trim();
     const owner = config.owner.trim();
@@ -182,18 +205,15 @@ jobs:
     };
     
     try {
-      // ১. লেটেস্ট রান ফেচ করা
       const runsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs?per_page=1`, { headers });
       if (!runsRes.ok) return null;
       const runsData = await runsRes.json();
       const latestRun = runsData.workflow_runs?.[0];
 
-      // যদি রান এখনো শেষ না হয় বা সফল না হয়, তবে ওয়েট করতে হবে (null রিটার্ন করবে)
       if (!latestRun || latestRun.status !== 'completed' || latestRun.conclusion !== 'success') {
         return null; 
       }
 
-      // ২. ওই সুনির্দিষ্ট রানের জন্য আর্টিফ্যাক্ট ফেচ করা
       const artifactsRes = await fetch(latestRun.artifacts_url, { headers });
       if (!artifactsRes.ok) return null;
       const data = await artifactsRes.json();
@@ -203,7 +223,7 @@ jobs:
 
       return {
         downloadUrl: artifact.archive_download_url,
-        webUrl: latestRun.html_url // কিউআর কোডের জন্য রানের ডাইরেক্ট লিঙ্ক
+        webUrl: latestRun.html_url 
       };
     } catch (e) {
       console.error("getLatestApk error:", e);

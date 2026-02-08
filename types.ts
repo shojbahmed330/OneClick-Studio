@@ -4,7 +4,8 @@ export enum AppMode {
   PREVIEW = 'PREVIEW',
   SHOP = 'SHOP',
   PROFILE = 'PROFILE',
-  SETTINGS = 'SETTINGS'
+  SETTINGS = 'SETTINGS',
+  ADMIN = 'ADMIN'
 }
 
 export interface GithubConfig {
@@ -27,6 +28,29 @@ export interface ChatMessage {
   options?: ChoiceOption[];
   choices?: { label: string; prompt: string }[];
   files?: Record<string, string>;
+}
+
+export interface Package {
+  id: string;
+  name: string;
+  tokens: number;
+  price: number;
+  color: string;
+  icon: string;
+  is_popular: boolean;
+}
+
+export interface Transaction {
+  id: string;
+  user_id: string;
+  package_id: string;
+  amount: number;
+  status: 'pending' | 'completed' | 'rejected';
+  payment_method: string;
+  trx_id: string;
+  screenshot_url?: string;
+  created_at: string;
+  user_email?: string; // Virtual field for admin
 }
 
 export interface User {
