@@ -129,7 +129,6 @@ const AuthPage: React.FC<{ onLoginSuccess: (user: UserType) => void, initialUpda
       if (error) throw error;
     } catch (error: any) {
       alert(error.message || "Google Login Failed");
-    } finally {
       setIsLoading(false);
     }
   };
@@ -305,29 +304,55 @@ const App: React.FC = () => {
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
 
-  // Listen for Auth Changes (Essential for Google Login redirects)
+  // Simplified and robust auth listener for OAuth redirects
   useEffect(() => {
-    const { data: { subscription } } = db.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const isRecovery = window.location.hash.includes('type=recovery') || path === '/update-password';
-        const userData = await db.getUser(session.user.email || '', session.user.id);
-        if (userData && !isRecovery) {
-          setUser(userData);
-          if (path === '/login' || path === '/' || !path) {
-            navigate('/dashboard');
+    let mounted = true;
+
+    const checkInitialSession = async () => {
+      try {
+        const session = await db.getCurrentSession();
+        if (session?.user && mounted) {
+          const userData = await db.getUser(session.user.email || '', session.user.id);
+          if (userData && mounted) {
+            setUser(userData);
           }
         }
-      } else {
-        if (path === '/dashboard') {
-          navigate('/login');
-        }
-        setUser(null);
+      } catch (err) {
+        console.error("Initial Session Check failed:", err);
+      } finally {
+        if (mounted) setAuthLoading(false);
       }
-      setAuthLoading(false);
+    };
+
+    checkInitialSession();
+
+    const { data: { subscription } } = db.onAuthStateChange(async (event, session) => {
+      try {
+        if (session?.user && mounted) {
+          const userData = await db.getUser(session.user.email || '', session.user.id);
+          if (userData && mounted) {
+            setUser(userData);
+            // Auto-navigate to dashboard if on login or landing
+            const curPath = window.location.pathname;
+            if (curPath === '/login' || curPath === '/' || !curPath) {
+              navigate('/dashboard');
+            }
+          }
+        } else if (mounted) {
+          setUser(null);
+        }
+      } catch (err) {
+        console.error("Auth Change logic error:", err);
+      } finally {
+        if (mounted) setAuthLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
-  }, [path]);
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const navigate = (to: string) => {
     const isBlobOrigin = window.location.protocol === 'blob:';
