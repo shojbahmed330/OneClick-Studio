@@ -145,18 +145,22 @@ export class DatabaseService {
   }
 
   async submitPaymentRequest(userId: string, pkgId: string, amount: number, method: string, trxId: string, screenshot?: string): Promise<boolean> {
-    const { error } = await this.supabase.from('transactions').insert({
+    // Ensure data is treated as high-priority insertion
+    const { data, error } = await this.supabase.from('transactions').insert({
       user_id: userId,
       package_id: pkgId,
       amount: amount,
       status: 'pending',
       payment_method: method,
       trx_id: trxId,
-      screenshot_url: screenshot
-    });
+      screenshot_url: screenshot || null
+    }).select();
     
-    if (error) throw error;
-    return true;
+    if (error) {
+      console.error("Payment Submission Error:", error);
+      throw new Error("আপনার ট্রানজ্যাকশন ডাটাবেসে সেভ করা যায়নি। স্ক্রিনশট সাইজ ছোট করে ট্রাই করুন।");
+    }
+    return !!data;
   }
 
   async getPendingTransactions(): Promise<Transaction[]> {
@@ -166,16 +170,18 @@ export class DatabaseService {
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
 
-    if (error) return [];
+    if (error) {
+      console.error("Admin Fetch Error:", error);
+      return [];
+    }
     return (data as any[]).map(t => ({
         ...t,
-        user_email: t.users?.email
+        user_email: t.users?.email || 'Unknown User'
     }));
   }
 
   async approveTransaction(txId: string): Promise<boolean> {
     try {
-      // 1. Get Transaction Details
       const { data: tx, error: txError } = await this.supabase
         .from('transactions')
         .select('*, packages(tokens)')
@@ -183,11 +189,8 @@ export class DatabaseService {
         .single();
         
       if (txError || !tx) throw new Error("Transaction not found");
-      if (tx.status !== 'pending') throw new Error("Already processed");
-
       const tokensToAdd = tx.packages?.tokens || 0;
 
-      // 2. Add Tokens to User
       const { data: user, error: userError } = await this.supabase
         .from('users')
         .select('tokens')
@@ -196,21 +199,8 @@ export class DatabaseService {
         
       if (userError) throw userError;
 
-      const { error: updateError } = await this.supabase
-        .from('users')
-        .update({ tokens: (user.tokens || 0) + tokensToAdd })
-        .eq('id', tx.user_id);
-
-      if (updateError) throw updateError;
-
-      // 3. Mark Transaction as Completed
-      const { error: finalError } = await this.supabase
-        .from('transactions')
-        .update({ status: 'completed' })
-        .eq('id', txId);
-
-      if (finalError) throw finalError;
-
+      await this.supabase.from('users').update({ tokens: (user.tokens || 0) + tokensToAdd }).eq('id', tx.user_id);
+      await this.supabase.from('transactions').update({ status: 'completed' }).eq('id', txId);
       return true;
     } catch (e) {
       console.error(e);
@@ -228,9 +218,7 @@ export class DatabaseService {
 
   async signOut() {
     localStorage.removeItem('df_force_login');
-    try { 
-      await this.supabase.auth.signOut(); 
-    } catch (e) {}
+    try { await this.supabase.auth.signOut(); } catch (e) {}
   }
 
   async useToken(userId: string, email: string): Promise<User | null> {
