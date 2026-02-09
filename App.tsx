@@ -199,7 +199,13 @@ const App: React.FC = () => {
   }, [user, path]);
 
   useEffect(() => {
-    if (mode === AppMode.SHOP) db.getPackages().then(setPackages);
+    if (mode === AppMode.SHOP) {
+      db.getPackages().then(pkgs => {
+        // ফ্রন্টএন্ডেও একবার ডুপ্লিকেট রিমুভ নিশ্চিত করা হচ্ছে
+        const unique = pkgs.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+        setPackages(unique);
+      });
+    }
     if (mode === AppMode.ADMIN && user?.isAdmin) {
       db.getPendingTransactions().then(setPendingTransactions);
     }
@@ -231,7 +237,7 @@ const App: React.FC = () => {
   };
 
   const handleApprove = async (txId: string) => {
-    if (!confirm("আপনি কি পেমেন্টটি অ্যাপ্রুভ করতে চান? এটি ইউজারের টোকেন বাড়িয়ে দেবে।")) return;
+    if (!confirm("আপনি কি পেমেন্টটি অ্যাপ্রুভ করতে চান? এটি সরাসরি ইউজারের প্রোফাইলে টোকেন যোগ করে দেবে।")) return;
     try {
       await db.approveTransaction(txId);
       setPendingTransactions(prev => prev.filter(t => t.id !== txId));
@@ -373,7 +379,7 @@ const App: React.FC = () => {
         ) : mode === AppMode.SHOP ? (
           <div className="flex-1 p-20 overflow-y-auto animate-in slide-in-from-top-4 relative">
              <div className="max-w-6xl mx-auto">
-                <div className="text-center mb-16"><h1 className="text-6xl font-black mb-4 tracking-tighter">Token <span className="text-cyan-400">Vault</span></h1><p className="text-slate-400 text-lg">ডাটাবেস থেকে প্যাকেজ কিনুন এবং এআই ক্ষমতা বাড়িয়ে নিন</p></div>
+                <div className="text-center mb-16"><h1 className="text-6xl font-black mb-4 tracking-tighter">Token <span className="text-cyan-400">Vault</span></h1><p className="text-slate-400 text-lg">পছন্দের প্যাকেজ কিনুন এবং এআই ক্ষমতা বাড়িয়ে নিন</p></div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                   {packages.map((pkg) => (
                     <div key={pkg.id} className="glass-card p-12 rounded-[4rem] border-white/10 relative transition-all hover:scale-[1.03]">
