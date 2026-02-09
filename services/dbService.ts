@@ -132,9 +132,18 @@ export class DatabaseService {
     
     if (error) return [];
     
-    // Ensure unique packages by ID to fix the "6 times" issue
-    const unique = data.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
-    return unique as Package[];
+    // ইউনিক প্যাকেজ নিশ্চিত করা (একই আইডি বারবার আসবে না)
+    const uniquePackages: Package[] = [];
+    const seenIds = new Set();
+    
+    (data || []).forEach(pkg => {
+      if (!seenIds.has(pkg.id)) {
+        seenIds.add(pkg.id);
+        uniquePackages.push(pkg);
+      }
+    });
+    
+    return uniquePackages;
   }
 
   async submitPaymentRequest(userId: string, pkgId: string, amount: number, method: string, trxId: string, screenshot?: string, message?: string): Promise<boolean> {
@@ -177,14 +186,14 @@ export class DatabaseService {
         user_email: userLookup.get(t.user_id) || 'Unknown User'
       }));
     } catch (e) {
-      console.error("Critical Admin Dashboard Fetch Error:", e);
+      console.error("Fetch Error:", e);
       return [];
     }
   }
 
   async approveTransaction(txId: string): Promise<boolean> {
     try {
-      // 1. Fetch transaction details
+      // ১. ট্রানজ্যাকশন ডাটা চেক
       const { data: tx, error: txError } = await this.supabase
         .from('transactions')
         .select('*')
@@ -193,7 +202,7 @@ export class DatabaseService {
         
       if (txError || !tx) throw new Error("পেমেন্ট তথ্য পাওয়া যায়নি");
 
-      // 2. Get tokens from the package
+      // ২. প্যাকেজ থেকে টোকেন সংখ্যা বের করা
       const { data: pkg, error: pkgError } = await this.supabase
         .from('packages')
         .select('tokens')
@@ -201,37 +210,36 @@ export class DatabaseService {
         .single();
       
       if (pkgError || !pkg) throw new Error("প্যাকেজ তথ্য পাওয়া যায়নি");
-      const tokensToAdd = pkg.tokens || 0;
 
-      // 3. Get user's current tokens
+      // ৩. ইউজারের বর্তমান টোকেন বের করা
       const { data: user, error: userError } = await this.supabase
         .from('users')
         .select('tokens')
         .eq('id', tx.user_id)
         .single();
         
-      if (userError || !user) throw new Error("ইউজার পাওয়া যায়নি");
+      if (userError || !user) throw new Error("ইউজার প্রোফাইল পাওয়া যায়নি");
 
-      // 4. Update user tokens (Credit them)
-      const newTotal = (user.tokens || 0) + tokensToAdd;
-      const { error: updateError } = await this.supabase
+      // ৪. টোকেন আপডেট করা (নতুন টোকেন = বর্তমান + প্যাকেজের টোকেন)
+      const newTokens = (user.tokens || 0) + (pkg.tokens || 0);
+      const { error: userUpdateErr } = await this.supabase
         .from('users')
-        .update({ tokens: newTotal })
+        .update({ tokens: newTokens })
         .eq('id', tx.user_id);
-      
-      if (updateError) throw updateError;
+        
+      if (userUpdateErr) throw new Error("টোকেন অ্যাড করা সম্ভব হয়নি (RLS Issue)");
 
-      // 5. Finalize transaction status (Permanent move to 'completed')
-      const { error: finalError } = await this.supabase
+      // ৫. ট্রানজ্যাকশন স্ট্যাটাস 'completed' করা
+      const { error: txUpdateErr } = await this.supabase
         .from('transactions')
         .update({ status: 'completed' })
         .eq('id', txId);
       
-      if (finalError) throw finalError;
+      if (txUpdateErr) throw new Error("ট্রানজ্যাকশন স্ট্যাটাস আপডেট হয়নি");
       
       return true;
-    } catch (e) {
-      console.error("Approval flow failed:", e);
+    } catch (e: any) {
+      console.error("Approve Failed:", e);
       throw e;
     }
   }
