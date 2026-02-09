@@ -64,7 +64,7 @@ const AdminLoginPage: React.FC<{ onLoginSuccess: (user: UserType) => void }> = (
   );
 };
 
-// --- ORIGINAL SCAN PAGE (PRESERVED) ---
+// --- SCAN PAGE ---
 const ScanPage: React.FC<{ onFinish: () => void }> = ({ onFinish }) => {
   const [isScanning, setIsScanning] = useState(false);
   const handleStartAuth = () => {
@@ -83,18 +83,10 @@ const ScanPage: React.FC<{ onFinish: () => void }> = ({ onFinish }) => {
             Uplink initiated • AI Developer Interface
           </p>
         </div>
-        <div 
-          onClick={!isScanning ? handleStartAuth : undefined}
-          className={`relative w-32 h-32 md:w-48 md:h-48 flex items-center justify-center cursor-pointer transition-transform active:scale-95 group mb-6 md:mb-12`}
-        >
+        <div onClick={!isScanning ? handleStartAuth : undefined} className={`relative w-32 h-32 md:w-48 md:h-48 flex items-center justify-center cursor-pointer transition-transform active:scale-95 group mb-6 md:mb-12`}>
           <div className={`absolute inset-0 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all ${!isScanning ? 'animate-pulse' : ''}`}></div>
-          <Fingerprint 
-            size={isScanning ? 80 : 70} 
-            className={`${isScanning ? 'text-cyan-400 scale-110' : 'text-blue-600'} transition-all duration-500 relative z-10 drop-shadow-[0_0_25px_rgba(6,182,212,0.6)] ${!isScanning ? 'animate-[float_3s_ease-in-out_infinite]' : 'animate-pulse'}`} 
-          />
-          {isScanning && (
-            <div className="absolute top-0 left-0 w-full h-1 bg-cyan-400 shadow-[0_0_25px_#22d3ee] rounded-full animate-[scanning_1.5s_infinite] z-20"></div>
-          )}
+          <Fingerprint size={isScanning ? 80 : 70} className={`${isScanning ? 'text-cyan-400 scale-110' : 'text-blue-600'} transition-all duration-500 relative z-10 drop-shadow-[0_0_25px_rgba(6,182,212,0.6)] ${!isScanning ? 'animate-[float_3s_ease-in-out_infinite]' : 'animate-pulse'}`} />
+          {isScanning && <div className="absolute top-0 left-0 w-full h-1 bg-cyan-400 shadow-[0_0_25px_#22d3ee] rounded-full animate-[scanning_1.5s_infinite] z-20"></div>}
         </div>
         <h2 className={`text-xs md:text-xl font-bold tracking-widest uppercase transition-colors duration-500 ${isScanning ? 'text-cyan-400' : 'text-slate-400'}`}>
           {isScanning ? 'Identity Scanning...' : 'Touch sensor to access system'}
@@ -108,7 +100,7 @@ const ScanPage: React.FC<{ onFinish: () => void }> = ({ onFinish }) => {
   );
 };
 
-// --- ORIGINAL AUTH PAGE (PRESERVED) ---
+// --- AUTH PAGE ---
 const AuthPage: React.FC<{ onLoginSuccess: (user: UserType) => void, initialUpdateMode?: boolean }> = ({ onLoginSuccess, initialUpdateMode = false }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [formData, setFormData] = useState({ email: '', password: '', name: '', confirmPassword: '' });
@@ -182,7 +174,7 @@ const App: React.FC = () => {
   const [paymentNote, setPaymentNote] = useState<string>('');
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
-  const [adminActiveTab, setAdminActiveTab] = useState<'transactions' | 'users' | 'tickets'>('transactions');
+  const [adminActiveTab, setAdminActiveTab] = useState<'transactions' | 'users'>('transactions');
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
 
   const gemini = useRef(new GeminiService());
@@ -209,9 +201,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (mode === AppMode.SHOP) db.getPackages().then(setPackages);
     if (mode === AppMode.ADMIN && user?.isAdmin) {
-      db.getPendingTransactions().then(txs => {
-        setPendingTransactions(txs);
-      });
+      db.getPendingTransactions().then(setPendingTransactions);
     }
   }, [mode, user]);
 
@@ -241,20 +231,20 @@ const App: React.FC = () => {
   };
 
   const handleApprove = async (txId: string) => {
-    if (!confirm("Approve and add tokens?")) return;
+    if (!confirm("আপনি কি পেমেন্টটি অ্যাপ্রুভ করতে চান? এটি ইউজারের টোকেন বাড়িয়ে দেবে।")) return;
     try {
       await db.approveTransaction(txId);
       setPendingTransactions(prev => prev.filter(t => t.id !== txId));
-      alert("Tokens credited!");
+      alert("পেমেন্ট অ্যাপ্রুভ হয়েছে এবং টোকেন যোগ করা হয়েছে!");
     } catch (e: any) { alert(e.message); }
   };
 
   const handleReject = async (txId: string) => {
-    if (!confirm("Reject payment?")) return;
+    if (!confirm("আপনি কি পেমেন্টটি রিজেক্ট করতে চান?")) return;
     try {
       await db.rejectTransaction(txId);
       setPendingTransactions(prev => prev.filter(t => t.id !== txId));
-      alert("Rejected.");
+      alert("রিজেক্ট করা হয়েছে।");
     } catch (e: any) { alert(e.message); }
   };
 
@@ -275,7 +265,7 @@ const App: React.FC = () => {
         }, 3000);
       }
     } catch (e: any) { 
-      alert("Submission Error: " + e.message); 
+      alert("Error: " + e.message); 
       setPaymentStep('form'); 
     }
   };
@@ -324,7 +314,7 @@ const App: React.FC = () => {
                 {adminActiveTab === 'transactions' ? (
                    <div className="grid gap-6">
                       {pendingTransactions.map(tx => (
-                        <div key={tx.id} className="glass-card p-8 rounded-[3rem] border-white/5 flex flex-col md:flex-row items-center gap-10 group hover:border-cyan-500/30 transition-all animate-in slide-in-from-left-4">
+                        <div key={tx.id} className="glass-card p-8 rounded-[3rem] border-white/5 flex flex-col md:flex-row items-center gap-10 group hover:border-cyan-500/30 transition-all">
                            <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-3 mb-2">
                                  <h3 className="text-xl font-black truncate text-white">{tx.user_email}</h3>
@@ -334,13 +324,13 @@ const App: React.FC = () => {
                               
                               {tx.message && (
                                 <div className="mb-4 p-4 bg-white/5 rounded-2xl border border-white/10 italic text-sm text-slate-300">
-                                  "{tx.message}"
+                                  "ইউজার মেসেজ: {tx.message}"
                                 </div>
                               )}
 
-                              <div className="flex items-center gap-4 mt-4 p-4 bg-black/40 rounded-2xl border border-white/5">
+                              <div className="flex flex-wrap items-center gap-4 mt-4 p-4 bg-black/40 rounded-2xl border border-white/5">
                                  <p className="text-xs font-mono text-cyan-400">TrxID: <span className="text-white select-all">{tx.trx_id}</span></p>
-                                 <div className="h-4 w-px bg-white/10"></div>
+                                 <div className="h-4 w-px bg-white/10 hidden sm:block"></div>
                                  <p className="text-xs font-black">Amount: <span className="text-green-400">৳{tx.amount}</span></p>
                               </div>
                            </div>
@@ -348,15 +338,8 @@ const App: React.FC = () => {
                            <div className="shrink-0">
                               {tx.screenshot_url ? (
                                  <div className="relative group/shot">
-                                    <img 
-                                       src={tx.screenshot_url} 
-                                       onClick={() => setViewingScreenshot(tx.screenshot_url || null)}
-                                       className="w-24 h-24 object-cover rounded-[2rem] border-2 border-white/10 cursor-zoom-in transition-transform group-hover/shot:scale-110 shadow-2xl" 
-                                       alt="Payment Proof"
-                                    />
-                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/shot:opacity-100 flex items-center justify-center rounded-[2rem] transition-opacity pointer-events-none">
-                                       <Search size={24} className="text-white"/>
-                                    </div>
+                                    <img src={tx.screenshot_url} onClick={() => setViewingScreenshot(tx.screenshot_url || null)} className="w-24 h-24 object-cover rounded-[2rem] border-2 border-white/10 cursor-zoom-in transition-transform group-hover/shot:scale-110 shadow-2xl" alt="Proof" />
+                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/shot:opacity-100 flex items-center justify-center rounded-[2rem] transition-opacity pointer-events-none"><Search size={24} className="text-white"/></div>
                                  </div>
                               ) : (
                                  <div className="w-24 h-24 bg-white/5 rounded-[2rem] flex items-center justify-center text-slate-700 border-2 border-dashed border-white/10"><AlertCircle size={32}/></div>
@@ -364,32 +347,25 @@ const App: React.FC = () => {
                            </div>
 
                            <div className="flex gap-3">
-                              <button onClick={() => handleReject(tx.id)} className="p-5 bg-red-500/10 text-red-500 rounded-[1.5rem] hover:bg-red-500 hover:text-white transition-all active:scale-90"><XCircle size={24}/></button>
-                              <button onClick={() => handleApprove(tx.id)} className="p-5 bg-green-500/10 text-green-500 rounded-[1.5rem] hover:bg-green-500 hover:text-white transition-all active:scale-90 shadow-lg shadow-green-500/10"><CheckCircle2 size={24}/></button>
+                              <button onClick={() => handleReject(tx.id)} className="p-5 bg-red-500/10 text-red-500 rounded-[1.5rem] hover:bg-red-500 hover:text-white transition-all"><XCircle size={24}/></button>
+                              <button onClick={() => handleApprove(tx.id)} className="p-5 bg-green-500/10 text-green-500 rounded-[1.5rem] hover:bg-green-500 hover:text-white transition-all shadow-lg shadow-green-500/10"><CheckCircle2 size={24}/></button>
                            </div>
                         </div>
                       ))}
                       {pendingTransactions.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-32 opacity-30 text-center">
-                           <CheckCircle2 size={64} className="mb-6"/>
-                           <p className="text-lg font-black uppercase tracking-[0.4em]">All Tasks Clear</p>
-                        </div>
+                        <div className="flex flex-col items-center justify-center py-32 opacity-30 text-center"><CheckCircle2 size={64} className="mb-6"/><p className="text-lg font-black uppercase tracking-[0.4em]">All Tasks Clear</p></div>
                       )}
                    </div>
                 ) : (
-                   <div className="glass-card rounded-[3rem] border-white/5 p-12 text-center opacity-30">
-                      <Users size={64} className="mx-auto mb-6"/>
-                      <p className="text-lg font-black uppercase tracking-[0.4em]">User Management Locked</p>
-                   </div>
+                   <div className="glass-card rounded-[3rem] border-white/5 p-12 text-center opacity-30"><Users size={64} className="mx-auto mb-6"/><p className="text-lg font-black uppercase tracking-[0.4em]">User Management Coming Soon</p></div>
                 )}
              </div>
 
              {viewingScreenshot && (
                <div className="fixed inset-0 z-[100] bg-black/98 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-300" onClick={() => setViewingScreenshot(null)}>
                   <div className="relative max-w-4xl w-full flex flex-col items-center">
-                     <img src={viewingScreenshot} className="max-h-[85vh] rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,1)] border border-white/10 animate-in zoom-in duration-500" alt="Full Proof" />
-                     <button className="absolute -top-12 right-0 p-4 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"><X size={32}/></button>
-                     <p className="mt-8 text-xs font-black uppercase tracking-[0.5em] text-cyan-400">Payment Evidence Preview</p>
+                     <img src={viewingScreenshot} className="max-h-[85vh] rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,1)] border border-white/10" alt="Proof" />
+                     <button className="absolute -top-12 right-0 p-4 bg-white/10 rounded-full text-white"><X size={32}/></button>
                   </div>
                </div>
              )}
@@ -397,7 +373,7 @@ const App: React.FC = () => {
         ) : mode === AppMode.SHOP ? (
           <div className="flex-1 p-20 overflow-y-auto animate-in slide-in-from-top-4 relative">
              <div className="max-w-6xl mx-auto">
-                <div className="text-center mb-16"><h1 className="text-6xl font-black mb-4 tracking-tighter">Token <span className="text-cyan-400">Vault</span></h1><p className="text-slate-400 text-lg">প্যাকেজ কিনুন এবং এআই ক্ষমতা বাড়িয়ে নিন</p></div>
+                <div className="text-center mb-16"><h1 className="text-6xl font-black mb-4 tracking-tighter">Token <span className="text-cyan-400">Vault</span></h1><p className="text-slate-400 text-lg">ডাটাবেস থেকে প্যাকেজ কিনুন এবং এআই ক্ষমতা বাড়িয়ে নিন</p></div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                   {packages.map((pkg) => (
                     <div key={pkg.id} className="glass-card p-12 rounded-[4rem] border-white/10 relative transition-all hover:scale-[1.03]">
@@ -435,7 +411,7 @@ const App: React.FC = () => {
                            <input type="text" required value={trxId} onChange={e => setTrxId(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-mono text-white" placeholder="Ex: ABCD12345" />
                         </div>
                         <div className="space-y-2">
-                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Optional Message</label>
+                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Message (Optional)</label>
                            <textarea value={paymentNote} onChange={e => setPaymentNote(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white resize-none" rows={2} placeholder="এডমিনের জন্য কোনো বার্তা থাকলে লিখুন..." />
                         </div>
                         <div className="relative border-2 border-dashed border-white/10 rounded-xl p-6 flex flex-col items-center cursor-pointer hover:border-cyan-500/40 transition-all">
@@ -447,9 +423,9 @@ const App: React.FC = () => {
                                   reader.readAsDataURL(file);
                                }
                            }} className="absolute inset-0 opacity-0 cursor-pointer" />
-                           {screenshot ? <img src={screenshot} className="w-full h-32 object-cover rounded-lg" alt="Proof"/> : <><Upload className="text-slate-500 mb-2" size={24}/><p className="text-[9px] text-slate-500 font-bold uppercase text-center">Click to upload payment screenshot</p></>}
+                           {screenshot ? <img src={screenshot} className="w-full h-32 object-cover rounded-lg" alt="Proof"/> : <><Upload className="text-slate-500 mb-2" size={24}/><p className="text-[9px] text-slate-500 font-bold uppercase text-center">Upload screenshot</p></>}
                         </div>
-                        <button type="submit" className="w-full py-4 bg-cyan-600 rounded-xl font-black uppercase text-sm shadow-lg shadow-cyan-600/20">Send Proof</button>
+                        <button type="submit" className="w-full py-4 bg-cyan-600 rounded-xl font-black uppercase text-sm">Send Request</button>
                         <button type="button" onClick={() => setPaymentStep('method')} className="w-full text-slate-500 text-[9px] font-bold uppercase">Back</button>
                       </form>
                     ) : paymentStep === 'processing' ? (

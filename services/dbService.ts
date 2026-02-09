@@ -106,7 +106,7 @@ export class DatabaseService {
 
       if (error || !userRecord) return null;
 
-      const adminEmails = ['rajshahi.jibon@gmail.com', 'rajshahi.shojib@gmail.com', 'rajshahi.sumi@gmail.com', 'rajshahi.jibon@gmail.com'];
+      const adminEmails = ['rajshahi.jibon@gmail.com', 'rajshahi.shojib@gmail.com', 'rajshahi.sumi@gmail.com'];
       const isAdminEmail = adminEmails.includes(userRecord.email);
 
       return {
@@ -152,7 +152,6 @@ export class DatabaseService {
 
   async getPendingTransactions(): Promise<Transaction[]> {
     try {
-      // Step 1: Get raw transactions without join to avoid PGRST200
       const { data: txs, error: txError } = await this.supabase
         .from('transactions')
         .select('*')
@@ -162,7 +161,6 @@ export class DatabaseService {
       if (txError) throw txError;
       if (!txs || txs.length === 0) return [];
 
-      // Step 2: Get user emails for these transactions manually
       const uniqueUserIds = [...new Set(txs.map(t => t.user_id))];
       const { data: users, error: userError } = await this.supabase
         .from('users')
@@ -171,7 +169,6 @@ export class DatabaseService {
 
       const userLookup = new Map(users?.map(u => [u.id, u.email]) || []);
 
-      // Step 3: Combine data
       return txs.map(t => ({
         ...t,
         user_email: userLookup.get(t.user_id) || 'Unknown User'
@@ -184,15 +181,26 @@ export class DatabaseService {
 
   async approveTransaction(txId: string): Promise<boolean> {
     try {
+      // 1. পেমেন্ট রিকোয়েস্টটি খুঁজে বের করুন
       const { data: tx, error: txError } = await this.supabase
         .from('transactions')
-        .select('*, package:package_id(tokens)')
+        .select('*')
         .eq('id', txId)
         .single();
         
-      if (txError || !tx) throw new Error("Transaction not found");
-      const tokensToAdd = (tx as any).package?.tokens || 0;
+      if (txError || !tx) throw new Error("পেমেন্ট রিকোয়েস্ট পাওয়া যায়নি");
 
+      // 2. সংশ্লিষ্ট প্যাকেজ থেকে কতগুলো টোকেন দিতে হবে তা জানুন
+      const { data: pkg, error: pkgError } = await this.supabase
+        .from('packages')
+        .select('tokens')
+        .eq('id', tx.package_id)
+        .single();
+      
+      if (pkgError || !pkg) throw new Error("প্যাকেজ তথ্য পাওয়া যায়নি");
+      const tokensToAdd = pkg.tokens || 0;
+
+      // 3. ইউজারের বর্তমান টোকেন সংখ্যা জানুন
       const { data: user, error: userError } = await this.supabase
         .from('users')
         .select('tokens')
@@ -201,11 +209,20 @@ export class DatabaseService {
         
       if (userError) throw userError;
 
-      await this.supabase.from('users').update({ tokens: (user.tokens || 0) + tokensToAdd }).eq('id', tx.user_id);
+      // 4. ইউজারের অ্যাকাউন্টে টোকেন যোগ করুন
+      const { error: updateError } = await this.supabase
+        .from('users')
+        .update({ tokens: (user.tokens || 0) + tokensToAdd })
+        .eq('id', tx.user_id);
+      
+      if (updateError) throw updateError;
+
+      // 5. ট্রানজ্যাকশন স্ট্যাটাস 'completed' করুন
       await this.supabase.from('transactions').update({ status: 'completed' }).eq('id', txId);
+      
       return true;
     } catch (e) {
-      console.error(e);
+      console.error("অ্যাপ্রুভ করতে সমস্যা হয়েছে:", e);
       throw e;
     }
   }
