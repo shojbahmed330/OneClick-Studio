@@ -49,6 +49,7 @@ export interface Transaction {
   payment_method: string;
   trx_id: string;
   screenshot_url?: string;
+  message?: string;
   created_at: string;
   user_email?: string; // Virtual field for admin
 }

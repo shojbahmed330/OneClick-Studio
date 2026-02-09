@@ -179,6 +179,7 @@ const App: React.FC = () => {
   const [paymentStep, setPaymentStep] = useState<'method' | 'form' | 'processing' | 'success'>('method');
   const [selectedMethod, setSelectedMethod] = useState<string>('');
   const [trxId, setTrxId] = useState<string>('');
+  const [paymentNote, setPaymentNote] = useState<string>('');
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
   const [adminActiveTab, setAdminActiveTab] = useState<'transactions' | 'users' | 'tickets'>('transactions');
@@ -262,11 +263,16 @@ const App: React.FC = () => {
     if (!isPurchasing || !user || !trxId) return;
     setPaymentStep('processing');
     try {
-      // Corrected: Passing screenshot and ensuring db call completes
-      const success = await db.submitPaymentRequest(user.id, isPurchasing.id, isPurchasing.price, selectedMethod, trxId, screenshot || undefined);
+      const success = await db.submitPaymentRequest(user.id, isPurchasing.id, isPurchasing.price, selectedMethod, trxId, screenshot || undefined, paymentNote || undefined);
       if (success) {
         setPaymentStep('success');
-        setTimeout(() => { setIsPurchasing(null); setPaymentStep('method'); setTrxId(''); setScreenshot(null); }, 3000);
+        setTimeout(() => { 
+          setIsPurchasing(null); 
+          setPaymentStep('method'); 
+          setTrxId(''); 
+          setScreenshot(null); 
+          setPaymentNote('');
+        }, 3000);
       }
     } catch (e: any) { 
       alert("Submission Error: " + e.message); 
@@ -322,9 +328,16 @@ const App: React.FC = () => {
                            <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-3 mb-2">
                                  <h3 className="text-xl font-black truncate text-white">{tx.user_email}</h3>
-                                 <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${tx.payment_method === 'bkash' ? 'bg-[#E2136E]' : 'bg-[#F7941D]'}`}>{tx.payment_method}</span>
+                                 <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${tx.payment_method === 'bkash' ? 'bg-[#E2136E]' : tx.payment_method === 'nagad' ? 'bg-[#F7941D]' : 'bg-[#8C3494]'}`}>{tx.payment_method}</span>
                               </div>
-                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{new Date(tx.created_at).toLocaleString()}</p>
+                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3">{new Date(tx.created_at).toLocaleString()}</p>
+                              
+                              {tx.message && (
+                                <div className="mb-4 p-4 bg-white/5 rounded-2xl border border-white/10 italic text-sm text-slate-300">
+                                  "{tx.message}"
+                                </div>
+                              )}
+
                               <div className="flex items-center gap-4 mt-4 p-4 bg-black/40 rounded-2xl border border-white/5">
                                  <p className="text-xs font-mono text-cyan-400">TrxID: <span className="text-white select-all">{tx.trx_id}</span></p>
                                  <div className="h-4 w-px bg-white/10"></div>
@@ -397,20 +410,34 @@ const App: React.FC = () => {
              </div>
              {isPurchasing && (
                <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[100] flex items-center justify-center p-6">
-                 <div className="max-w-md w-full glass-card p-10 rounded-[3rem] border-white/10 animate-in zoom-in-95 shadow-2xl">
+                 <div className="max-w-md w-full glass-card p-10 rounded-[3rem] border-white/10 animate-in zoom-in-95 shadow-2xl overflow-y-auto max-h-[90vh] custom-scroll">
                     {paymentStep === 'method' ? (
                       <div className="space-y-8">
                         <div className="text-center"><h2 className="text-3xl font-black">Checkout</h2><p className="text-slate-500 uppercase font-black text-[10px] mt-2 tracking-widest">Select Method</p></div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <button onClick={() => {setSelectedMethod('bkash'); setPaymentStep('form');}} className="h-20 bg-[#E2136E] rounded-2xl flex items-center justify-center text-white font-black uppercase text-xs">bKash</button>
-                          <button onClick={() => {setSelectedMethod('nagad'); setPaymentStep('form');}} className="h-20 bg-[#F7941D] rounded-2xl flex items-center justify-center text-white font-black uppercase text-xs">Nagad</button>
+                        <div className="grid grid-cols-1 gap-4">
+                          <button onClick={() => {setSelectedMethod('bkash'); setPaymentStep('form');}} className="h-16 bg-[#E2136E] rounded-2xl flex items-center justify-center text-white font-black uppercase text-xs">bKash</button>
+                          <button onClick={() => {setSelectedMethod('nagad'); setPaymentStep('form');}} className="h-16 bg-[#F7941D] rounded-2xl flex items-center justify-center text-white font-black uppercase text-xs">Nagad</button>
+                          <button onClick={() => {setSelectedMethod('rocket'); setPaymentStep('form');}} className="h-16 bg-[#8C3494] rounded-2xl flex items-center justify-center text-white font-black uppercase text-xs">Rocket</button>
                         </div>
                         <button onClick={() => setIsPurchasing(null)} className="w-full text-slate-500 text-xs font-black uppercase">Cancel</button>
                       </div>
                     ) : paymentStep === 'form' ? (
                       <form onSubmit={handleSubmitPayment} className="space-y-6">
-                        <h2 className="text-2xl font-black text-center">Verification</h2>
-                        <input type="text" required value={trxId} onChange={e => setTrxId(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-mono" placeholder="TrxID (Ex: ABCD12345)" />
+                        <div className="text-center">
+                          <h2 className="text-2xl font-black">Verification</h2>
+                          <div className="mt-4 p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl">
+                             <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400 mb-1">Send Money To ({selectedMethod})</p>
+                             <p className="text-2xl font-black text-white tracking-widest">01721013902</p>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Transaction ID</label>
+                           <input type="text" required value={trxId} onChange={e => setTrxId(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-mono text-white" placeholder="Ex: ABCD12345" />
+                        </div>
+                        <div className="space-y-2">
+                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Optional Message</label>
+                           <textarea value={paymentNote} onChange={e => setPaymentNote(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white resize-none" rows={2} placeholder="এডমিনের জন্য কোনো বার্তা থাকলে লিখুন..." />
+                        </div>
                         <div className="relative border-2 border-dashed border-white/10 rounded-xl p-6 flex flex-col items-center cursor-pointer hover:border-cyan-500/40 transition-all">
                            <input type="file" accept="image/*" onChange={e => {
                                const file = e.target.files?.[0];
@@ -422,7 +449,7 @@ const App: React.FC = () => {
                            }} className="absolute inset-0 opacity-0 cursor-pointer" />
                            {screenshot ? <img src={screenshot} className="w-full h-32 object-cover rounded-lg" alt="Proof"/> : <><Upload className="text-slate-500 mb-2" size={24}/><p className="text-[9px] text-slate-500 font-bold uppercase text-center">Click to upload payment screenshot</p></>}
                         </div>
-                        <button type="submit" className="w-full py-4 bg-cyan-600 rounded-xl font-black uppercase text-sm">Send Proof</button>
+                        <button type="submit" className="w-full py-4 bg-cyan-600 rounded-xl font-black uppercase text-sm shadow-lg shadow-cyan-600/20">Send Proof</button>
                         <button type="button" onClick={() => setPaymentStep('method')} className="w-full text-slate-500 text-[9px] font-bold uppercase">Back</button>
                       </form>
                     ) : paymentStep === 'processing' ? (

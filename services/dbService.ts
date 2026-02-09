@@ -134,7 +134,7 @@ export class DatabaseService {
     return data as Package[];
   }
 
-  async submitPaymentRequest(userId: string, pkgId: string, amount: number, method: string, trxId: string, screenshot?: string): Promise<boolean> {
+  async submitPaymentRequest(userId: string, pkgId: string, amount: number, method: string, trxId: string, screenshot?: string, message?: string): Promise<boolean> {
     const { data, error } = await this.supabase.from('transactions').insert({
       user_id: userId,
       package_id: pkgId,
@@ -142,7 +142,8 @@ export class DatabaseService {
       status: 'pending',
       payment_method: method,
       trx_id: trxId,
-      screenshot_url: screenshot || null
+      screenshot_url: screenshot || null,
+      message: message || null
     }).select();
     
     if (error) throw error;
