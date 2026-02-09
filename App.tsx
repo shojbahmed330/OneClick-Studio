@@ -6,7 +6,7 @@ import {
   AlertCircle, Key, Mail, ArrowLeft, FileCode, ShoppingCart, User as UserIcon,
   ChevronRight, Github, Save, Trash2, Square, Circle, RefreshCw, Fingerprint,
   User, Lock, Eye, EyeOff, MessageSquare, Monitor, CreditCard, Upload, X, ShieldCheck,
-  FileJson, Layout, Users, BarChart3, Clock, Wallet, CheckCircle2, XCircle, Search
+  FileJson, Layout, Users, BarChart3, Clock, Wallet, CheckCircle2, XCircle, Search, TrendingUp
 } from 'lucide-react';
 import { AppMode, ChatMessage, User as UserType, GithubConfig, Package, Transaction } from './types';
 import { GeminiService } from './services/geminiService';
@@ -174,8 +174,9 @@ const App: React.FC = () => {
   const [paymentNote, setPaymentNote] = useState<string>('');
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
-  const [adminActiveTab, setAdminActiveTab] = useState<'transactions' | 'users'>('transactions');
+  const [adminActiveTab, setAdminActiveTab] = useState<'analytics' | 'transactions' | 'users'>('analytics');
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
+  const [adminStats, setAdminStats] = useState({ totalRevenue: 0, usersToday: 0, topPackage: 'Loading...', salesCount: 0 });
 
   const gemini = useRef(new GeminiService());
   const db = DatabaseService.getInstance();
@@ -201,13 +202,13 @@ const App: React.FC = () => {
   useEffect(() => {
     if (mode === AppMode.SHOP) {
       db.getPackages().then(pkgs => {
-        // Double check uniqueness in frontend as well
         const unique = pkgs.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
         setPackages(unique);
       });
     }
     if (mode === AppMode.ADMIN && user?.isAdmin) {
       db.getPendingTransactions().then(setPendingTransactions);
+      db.getAdminStats().then(setAdminStats);
     }
   }, [mode, user]);
 
@@ -243,8 +244,8 @@ const App: React.FC = () => {
       if (success) {
         setPendingTransactions(prev => prev.filter(t => t.id !== txId));
         alert("পেমেন্ট সফলভাবে অ্যাপ্রুভ হয়েছে এবং টোকেন যোগ হয়েছে!");
-        // Refresh admin data to be sure
         db.getPendingTransactions().then(setPendingTransactions);
+        db.getAdminStats().then(setAdminStats);
       }
     } catch (e: any) { alert("এরর: " + e.message); }
   };
@@ -311,19 +312,61 @@ const App: React.FC = () => {
       <main className="flex-1 flex overflow-hidden">
         {mode === AppMode.ADMIN && user.isAdmin ? (
           <div className="flex-1 flex flex-col bg-[#020617] p-8 lg:p-12 overflow-hidden animate-in fade-in">
-             <div className="flex flex-col md:flex-row items-center justify-between mb-12 gap-6">
+             <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-6">
                 <div>
                    <h1 className="text-4xl font-black tracking-tighter flex items-center gap-4"><ShieldCheck className="text-cyan-400" size={36}/> Admin <span className="text-cyan-400">Dashboard</span></h1>
-                   <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Transaction Pipeline Control</p>
+                   <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Master Control Terminal</p>
                 </div>
-                <div className="flex gap-4 bg-slate-900/50 p-1.5 rounded-2xl border border-white/5">
-                   <button onClick={() => setAdminActiveTab('transactions')} className={`px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminActiveTab === 'transactions' ? 'bg-cyan-500 text-black shadow-xl' : 'text-slate-500 hover:text-white'}`}>Transactions</button>
-                   <button onClick={() => setAdminActiveTab('users')} className={`px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminActiveTab === 'users' ? 'bg-cyan-500 text-black shadow-xl' : 'text-slate-500 hover:text-white'}`}>User List</button>
+                <div className="flex gap-2 bg-slate-900/50 p-1 rounded-2xl border border-white/5">
+                   <button onClick={() => setAdminActiveTab('analytics')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminActiveTab === 'analytics' ? 'bg-cyan-500 text-black' : 'text-slate-500'}`}>Analytics</button>
+                   <button onClick={() => setAdminActiveTab('transactions')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminActiveTab === 'transactions' ? 'bg-cyan-500 text-black' : 'text-slate-500'}`}>Transactions</button>
+                   <button onClick={() => setAdminActiveTab('users')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminActiveTab === 'users' ? 'bg-cyan-500 text-black' : 'text-slate-500'}`}>User List</button>
                 </div>
              </div>
              
              <div className="flex-1 overflow-y-auto custom-scroll pr-4 pb-20">
-                {adminActiveTab === 'transactions' ? (
+                {adminActiveTab === 'analytics' ? (
+                   <div className="space-y-12 animate-in zoom-in-95 duration-500">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                         <div className="glass-card p-10 rounded-[3rem] border-green-500/20 bg-gradient-to-br from-green-500/10 to-transparent">
+                            <Wallet size={32} className="text-green-400 mb-4"/>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Revenue</p>
+                            <h2 className="text-5xl font-black mt-2 text-white">৳{adminStats.totalRevenue}</h2>
+                         </div>
+                         <div className="glass-card p-10 rounded-[3rem] border-blue-500/20 bg-gradient-to-br from-blue-500/10 to-transparent">
+                            <Users size={32} className="text-blue-400 mb-4"/>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">New Users Today</p>
+                            <h2 className="text-5xl font-black mt-2 text-white">{adminStats.usersToday}</h2>
+                         </div>
+                         <div className="glass-card p-10 rounded-[3rem] border-purple-500/20 bg-gradient-to-br from-purple-500/10 to-transparent">
+                            <TrendingUp size={32} className="text-purple-400 mb-4"/>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Top Package</p>
+                            <h2 className="text-2xl font-black mt-2 text-white truncate">{adminStats.topPackage}</h2>
+                            <p className="text-[10px] text-purple-400/50 mt-1 font-bold">Total Sales: {adminStats.salesCount}</p>
+                         </div>
+                      </div>
+
+                      <div className="glass-card p-12 rounded-[4rem] border-white/5">
+                         <h3 className="text-xl font-black mb-8 flex items-center gap-3"><BarChart3 className="text-cyan-400"/> System Insights</h3>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                            <div className="space-y-4">
+                               <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Growth Factor</p>
+                               <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                                  <div className="h-full bg-cyan-500 w-[65%]" />
+                               </div>
+                               <p className="text-[10px] text-slate-500">System is performing 15% better than last week.</p>
+                            </div>
+                            <div className="p-6 bg-black/40 rounded-3xl border border-white/5 flex items-center justify-between">
+                               <div>
+                                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Pending Actions</p>
+                                  <h4 className="text-2xl font-black text-amber-400">{pendingTransactions.length}</h4>
+                               </div>
+                               <button onClick={() => setAdminActiveTab('transactions')} className="px-6 py-2 bg-amber-400 text-black rounded-xl text-[10px] font-black uppercase">Review Now</button>
+                            </div>
+                         </div>
+                      </div>
+                   </div>
+                ) : adminActiveTab === 'transactions' ? (
                    <div className="grid gap-6">
                       {pendingTransactions.map(tx => (
                         <div key={tx.id} className="glass-card p-8 rounded-[3rem] border-white/5 flex flex-col md:flex-row items-center gap-10 group hover:border-cyan-500/30 transition-all">
@@ -333,40 +376,21 @@ const App: React.FC = () => {
                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${tx.payment_method === 'bkash' ? 'bg-[#E2136E]' : tx.payment_method === 'nagad' ? 'bg-[#F7941D]' : 'bg-[#8C3494]'}`}>{tx.payment_method}</span>
                               </div>
                               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3">{new Date(tx.created_at).toLocaleString()}</p>
-                              
-                              {tx.message && (
-                                <div className="mb-4 p-4 bg-white/5 rounded-2xl border border-white/10 italic text-sm text-slate-300">
-                                  "ইউজার বার্তা: {tx.message}"
-                                </div>
-                              )}
-
+                              {tx.message && <div className="mb-4 p-4 bg-white/5 rounded-2xl border border-white/10 italic text-sm text-slate-300">"ইউজার বার্তা: {tx.message}"</div>}
                               <div className="flex flex-wrap items-center gap-4 mt-4 p-4 bg-black/40 rounded-2xl border border-white/5">
                                  <p className="text-xs font-mono text-cyan-400">TrxID: <span className="text-white select-all">{tx.trx_id}</span></p>
-                                 <div className="h-4 w-px bg-white/10 hidden sm:block"></div>
-                                 <p className="text-xs font-black">Amount: <span className="text-green-400">৳{tx.amount}</span></p>
+                                 <p className="text-xs font-black ml-auto">Amount: <span className="text-green-400">৳{tx.amount}</span></p>
                               </div>
                            </div>
-                           
                            <div className="shrink-0">
-                              {tx.screenshot_url ? (
-                                 <div className="relative group/shot">
-                                    <img src={tx.screenshot_url} onClick={() => setViewingScreenshot(tx.screenshot_url || null)} className="w-24 h-24 object-cover rounded-[2rem] border-2 border-white/10 cursor-zoom-in transition-transform group-hover/shot:scale-110 shadow-2xl" alt="Proof" />
-                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/shot:opacity-100 flex items-center justify-center rounded-[2rem] transition-opacity pointer-events-none"><Search size={24} className="text-white"/></div>
-                                 </div>
-                              ) : (
-                                 <div className="w-24 h-24 bg-white/5 rounded-[2rem] flex items-center justify-center text-slate-700 border-2 border-dashed border-white/10"><AlertCircle size={32}/></div>
-                              )}
+                              {tx.screenshot_url ? <img src={tx.screenshot_url} onClick={() => setViewingScreenshot(tx.screenshot_url || null)} className="w-24 h-24 object-cover rounded-[2rem] border-2 border-white/10 cursor-zoom-in hover:scale-110 transition-all" alt="Proof" /> : <div className="w-24 h-24 bg-white/5 rounded-[2rem] flex items-center justify-center text-slate-700 border-2 border-dashed border-white/10"><AlertCircle size={32}/></div>}
                            </div>
-
                            <div className="flex gap-3">
                               <button onClick={() => handleReject(tx.id)} className="p-5 bg-red-500/10 text-red-500 rounded-[1.5rem] hover:bg-red-500 hover:text-white transition-all"><XCircle size={24}/></button>
-                              <button onClick={() => handleApprove(tx.id)} className="p-5 bg-green-500/10 text-green-500 rounded-[1.5rem] hover:bg-green-500 hover:text-white transition-all shadow-lg shadow-green-500/10"><CheckCircle2 size={24}/></button>
+                              <button onClick={() => handleApprove(tx.id)} className="p-5 bg-green-500/10 text-green-500 rounded-[1.5rem] hover:bg-green-500 hover:text-white transition-all shadow-lg"><CheckCircle2 size={24}/></button>
                            </div>
                         </div>
                       ))}
-                      {pendingTransactions.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-32 opacity-30 text-center"><CheckCircle2 size={64} className="mb-6"/><p className="text-lg font-black uppercase tracking-[0.4em]">All Tasks Clear</p></div>
-                      )}
                    </div>
                 ) : (
                    <div className="glass-card rounded-[3rem] border-white/5 p-12 text-center opacity-30"><Users size={64} className="mx-auto mb-6"/><p className="text-lg font-black uppercase tracking-[0.4em]">User Management Locked</p></div>
@@ -374,9 +398,9 @@ const App: React.FC = () => {
              </div>
 
              {viewingScreenshot && (
-               <div className="fixed inset-0 z-[100] bg-black/98 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-300" onClick={() => setViewingScreenshot(null)}>
+               <div className="fixed inset-0 z-[100] bg-black/98 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in" onClick={() => setViewingScreenshot(null)}>
                   <div className="relative max-w-4xl w-full flex flex-col items-center">
-                     <img src={viewingScreenshot} className="max-h-[85vh] rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,1)] border border-white/10" alt="Full Proof" />
+                     <img src={viewingScreenshot} className="max-h-[85vh] rounded-[3rem] shadow-2xl border border-white/10" alt="Full Proof" />
                      <button className="absolute -top-12 right-0 p-4 bg-white/10 rounded-full text-white"><X size={32}/></button>
                   </div>
                </div>

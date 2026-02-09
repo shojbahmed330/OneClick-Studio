@@ -132,7 +132,6 @@ export class DatabaseService {
     
     if (error) return [];
     
-    // ইউনিক প্যাকেজ নিশ্চিত করা (একই আইডি বারবার আসবে না)
     const uniquePackages: Package[] = [];
     const seenIds = new Set();
     
@@ -191,9 +190,59 @@ export class DatabaseService {
     }
   }
 
+  async getAdminStats() {
+    try {
+      // ১. টোটাল ইনকাম (সফল ট্রানজ্যাকশন থেকে)
+      const { data: txs } = await this.supabase
+        .from('transactions')
+        .select('amount, status, package_id')
+        .eq('status', 'completed');
+      
+      const totalRevenue = txs?.reduce((acc, curr) => acc + (curr.amount || 0), 0) || 0;
+
+      // ২. আজকের নতুন ইউজার
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const { count: usersToday } = await this.supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', today.toISOString());
+
+      // ৩. পপুলার প্যাকেজ বের করা
+      const pkgCounts: Record<string, number> = {};
+      txs?.forEach(t => {
+        pkgCounts[t.package_id] = (pkgCounts[t.package_id] || 0) + 1;
+      });
+      
+      let topPkgId = '';
+      let maxCount = 0;
+      Object.entries(pkgCounts).forEach(([id, count]) => {
+        if (count > maxCount) {
+          maxCount = count;
+          topPkgId = id;
+        }
+      });
+
+      let topPkgName = 'None';
+      if (topPkgId) {
+        const { data: pkg } = await this.supabase.from('packages').select('name').eq('id', topPkgId).single();
+        topPkgName = pkg?.name || 'Unknown';
+      }
+
+      return {
+        totalRevenue,
+        usersToday: usersToday || 0,
+        topPackage: topPkgName,
+        salesCount: maxCount
+      };
+    } catch (e) {
+      console.error("Stats Error:", e);
+      return { totalRevenue: 0, usersToday: 0, topPackage: 'N/A', salesCount: 0 };
+    }
+  }
+
   async approveTransaction(txId: string): Promise<boolean> {
     try {
-      // ১. ট্রানজ্যাকশন ডাটা চেক
       const { data: tx, error: txError } = await this.supabase
         .from('transactions')
         .select('*')
@@ -202,7 +251,6 @@ export class DatabaseService {
         
       if (txError || !tx) throw new Error("পেমেন্ট তথ্য পাওয়া যায়নি");
 
-      // ২. প্যাকেজ থেকে টোকেন সংখ্যা বের করা
       const { data: pkg, error: pkgError } = await this.supabase
         .from('packages')
         .select('tokens')
@@ -211,7 +259,6 @@ export class DatabaseService {
       
       if (pkgError || !pkg) throw new Error("প্যাকেজ তথ্য পাওয়া যায়নি");
 
-      // ৩. ইউজারের বর্তমান টোকেন বের করা
       const { data: user, error: userError } = await this.supabase
         .from('users')
         .select('tokens')
@@ -220,7 +267,6 @@ export class DatabaseService {
         
       if (userError || !user) throw new Error("ইউজার প্রোফাইল পাওয়া যায়নি");
 
-      // ৪. টোকেন আপডেট করা (নতুন টোকেন = বর্তমান + প্যাকেজের টোকেন)
       const newTokens = (user.tokens || 0) + (pkg.tokens || 0);
       const { error: userUpdateErr } = await this.supabase
         .from('users')
@@ -229,7 +275,6 @@ export class DatabaseService {
         
       if (userUpdateErr) throw new Error("টোকেন অ্যাড করা সম্ভব হয়নি (RLS Issue)");
 
-      // ৫. ট্রানজ্যাকশন স্ট্যাটাস 'completed' করা
       const { error: txUpdateErr } = await this.supabase
         .from('transactions')
         .update({ status: 'completed' })
