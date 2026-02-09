@@ -131,18 +131,25 @@ export class DatabaseService {
       .order('price', { ascending: true });
     
     if (error) return [];
-    
-    const uniquePackages: Package[] = [];
-    const seenIds = new Set();
-    
-    (data || []).forEach(pkg => {
-      if (!seenIds.has(pkg.id)) {
-        seenIds.add(pkg.id);
-        uniquePackages.push(pkg);
-      }
-    });
-    
-    return uniquePackages;
+    return data || [];
+  }
+
+  async createPackage(pkg: Omit<Package, 'id'>) {
+    const { data, error } = await this.supabase.from('packages').insert(pkg).select();
+    if (error) throw error;
+    return data;
+  }
+
+  async updatePackage(id: string, pkg: Partial<Package>) {
+    const { data, error } = await this.supabase.from('packages').update(pkg).eq('id', id).select();
+    if (error) throw error;
+    return data;
+  }
+
+  async deletePackage(id: string) {
+    const { error } = await this.supabase.from('packages').delete().eq('id', id);
+    if (error) throw error;
+    return true;
   }
 
   async submitPaymentRequest(userId: string, pkgId: string, amount: number, method: string, trxId: string, screenshot?: string, message?: string): Promise<boolean> {
@@ -161,19 +168,18 @@ export class DatabaseService {
     return !!data;
   }
 
-  async getPendingTransactions(): Promise<Transaction[]> {
+  async getAdminTransactions(): Promise<Transaction[]> {
     try {
       const { data: txs, error: txError } = await this.supabase
         .from('transactions')
         .select('*')
-        .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
       if (txError) throw txError;
       if (!txs || txs.length === 0) return [];
 
       const uniqueUserIds = [...new Set(txs.map(t => t.user_id))];
-      const { data: users, error: userError } = await this.supabase
+      const { data: users } = await this.supabase
         .from('users')
         .select('id, email')
         .in('id', uniqueUserIds);
@@ -185,14 +191,13 @@ export class DatabaseService {
         user_email: userLookup.get(t.user_id) || 'Unknown User'
       }));
     } catch (e) {
-      console.error("Fetch Error:", e);
+      console.error("Admin Fetch Error:", e);
       return [];
     }
   }
 
   async getAdminStats() {
     try {
-      // ১. টোটাল ইনকাম (সফল ট্রানজ্যাকশন থেকে)
       const { data: txs } = await this.supabase
         .from('transactions')
         .select('amount, status, package_id')
@@ -200,7 +205,6 @@ export class DatabaseService {
       
       const totalRevenue = txs?.reduce((acc, curr) => acc + (curr.amount || 0), 0) || 0;
 
-      // ২. আজকের নতুন ইউজার
       const today = new Date();
       today.setHours(0,0,0,0);
       const { count: usersToday } = await this.supabase
@@ -208,7 +212,6 @@ export class DatabaseService {
         .select('*', { count: 'exact', head: true })
         .gte('created_at', today.toISOString());
 
-      // ৩. পপুলার প্যাকেজ বের করা
       const pkgCounts: Record<string, number> = {};
       txs?.forEach(t => {
         pkgCounts[t.package_id] = (pkgCounts[t.package_id] || 0) + 1;
@@ -236,64 +239,32 @@ export class DatabaseService {
         salesCount: maxCount
       };
     } catch (e) {
-      console.error("Stats Error:", e);
       return { totalRevenue: 0, usersToday: 0, topPackage: 'N/A', salesCount: 0 };
     }
   }
 
   async approveTransaction(txId: string): Promise<boolean> {
     try {
-      const { data: tx, error: txError } = await this.supabase
-        .from('transactions')
-        .select('*')
-        .eq('id', txId)
-        .single();
-        
+      const { data: tx, error: txError } = await this.supabase.from('transactions').select('*').eq('id', txId).single();
       if (txError || !tx) throw new Error("পেমেন্ট তথ্য পাওয়া যায়নি");
 
-      const { data: pkg, error: pkgError } = await this.supabase
-        .from('packages')
-        .select('tokens')
-        .eq('id', tx.package_id)
-        .single();
-      
+      const { data: pkg, error: pkgError } = await this.supabase.from('packages').select('tokens').eq('id', tx.package_id).single();
       if (pkgError || !pkg) throw new Error("প্যাকেজ তথ্য পাওয়া যায়নি");
 
-      const { data: user, error: userError } = await this.supabase
-        .from('users')
-        .select('tokens')
-        .eq('id', tx.user_id)
-        .single();
-        
+      const { data: user, error: userError } = await this.supabase.from('users').select('tokens').eq('id', tx.user_id).single();
       if (userError || !user) throw new Error("ইউজার প্রোফাইল পাওয়া যায়নি");
 
       const newTokens = (user.tokens || 0) + (pkg.tokens || 0);
-      const { error: userUpdateErr } = await this.supabase
-        .from('users')
-        .update({ tokens: newTokens })
-        .eq('id', tx.user_id);
-        
-      if (userUpdateErr) throw new Error("টোকেন অ্যাড করা সম্ভব হয়নি (RLS Issue)");
-
-      const { error: txUpdateErr } = await this.supabase
-        .from('transactions')
-        .update({ status: 'completed' })
-        .eq('id', txId);
-      
-      if (txUpdateErr) throw new Error("ট্রানজ্যাকশন স্ট্যাটাস আপডেট হয়নি");
-      
+      await this.supabase.from('users').update({ tokens: newTokens }).eq('id', tx.user_id);
+      await this.supabase.from('transactions').update({ status: 'completed' }).eq('id', txId);
       return true;
     } catch (e: any) {
-      console.error("Approve Failed:", e);
       throw e;
     }
   }
 
   async rejectTransaction(txId: string): Promise<boolean> {
-    const { error } = await this.supabase
-      .from('transactions')
-      .update({ status: 'rejected' })
-      .eq('id', txId);
+    const { error } = await this.supabase.from('transactions').update({ status: 'rejected' }).eq('id', txId);
     return !error;
   }
 
@@ -305,7 +276,6 @@ export class DatabaseService {
   async useToken(userId: string, email: string): Promise<User | null> {
     const cleanEmail = email.trim().toLowerCase();
     if (cleanEmail === 'rajshahi.shojib@gmail.com') return this.getUser(cleanEmail, userId);
-    
     try {
       const { data: user } = await this.supabase.from('users').select('tokens').eq('id', userId).single();
       if (user && user.tokens > 0) {

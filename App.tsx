@@ -6,7 +6,8 @@ import {
   AlertCircle, Key, Mail, ArrowLeft, FileCode, ShoppingCart, User as UserIcon,
   ChevronRight, Github, Save, Trash2, Square, Circle, RefreshCw, Fingerprint,
   User, Lock, Eye, EyeOff, MessageSquare, Monitor, CreditCard, Upload, X, ShieldCheck,
-  FileJson, Layout, Users, BarChart3, Clock, Wallet, CheckCircle2, XCircle, Search, TrendingUp
+  FileJson, Layout, Users, BarChart3, Clock, Wallet, CheckCircle2, XCircle, Search, TrendingUp,
+  Plus, Edit2
 } from 'lucide-react';
 import { AppMode, ChatMessage, User as UserType, GithubConfig, Package, Transaction } from './types';
 import { GeminiService } from './services/geminiService';
@@ -173,10 +174,13 @@ const App: React.FC = () => {
   const [trxId, setTrxId] = useState<string>('');
   const [paymentNote, setPaymentNote] = useState<string>('');
   const [screenshot, setScreenshot] = useState<string | null>(null);
-  const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
-  const [adminActiveTab, setAdminActiveTab] = useState<'analytics' | 'transactions' | 'users'>('analytics');
+  const [adminTransactions, setAdminTransactions] = useState<Transaction[]>([]);
+  const [adminActiveTab, setAdminActiveTab] = useState<'analytics' | 'transactions' | 'packages'>('analytics');
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
   const [adminStats, setAdminStats] = useState({ totalRevenue: 0, usersToday: 0, topPackage: 'Loading...', salesCount: 0 });
+  const [adminSearch, setAdminSearch] = useState('');
+  const [adminMethodFilter, setAdminMethodFilter] = useState('all');
+  const [editingPackage, setEditingPackage] = useState<Partial<Package> | null>(null);
 
   const gemini = useRef(new GeminiService());
   const db = DatabaseService.getInstance();
@@ -200,17 +204,14 @@ const App: React.FC = () => {
   }, [user, path]);
 
   useEffect(() => {
-    if (mode === AppMode.SHOP) {
-      db.getPackages().then(pkgs => {
-        const unique = pkgs.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
-        setPackages(unique);
-      });
+    if (mode === AppMode.SHOP || (mode === AppMode.ADMIN && adminActiveTab === 'packages')) {
+      db.getPackages().then(setPackages);
     }
     if (mode === AppMode.ADMIN && user?.isAdmin) {
-      db.getPendingTransactions().then(setPendingTransactions);
+      db.getAdminTransactions().then(setAdminTransactions);
       db.getAdminStats().then(setAdminStats);
     }
-  }, [mode, user]);
+  }, [mode, user, adminActiveTab]);
 
   const navigate = (to: string) => {
     try { window.history.pushState({}, '', to); } catch (e) {}
@@ -242,9 +243,8 @@ const App: React.FC = () => {
     try {
       const success = await db.approveTransaction(txId);
       if (success) {
-        setPendingTransactions(prev => prev.filter(t => t.id !== txId));
         alert("পেমেন্ট সফলভাবে অ্যাপ্রুভ হয়েছে এবং টোকেন যোগ হয়েছে!");
-        db.getPendingTransactions().then(setPendingTransactions);
+        db.getAdminTransactions().then(setAdminTransactions);
         db.getAdminStats().then(setAdminStats);
       }
     } catch (e: any) { alert("এরর: " + e.message); }
@@ -255,11 +255,41 @@ const App: React.FC = () => {
     try {
       const success = await db.rejectTransaction(txId);
       if (success) {
-        setPendingTransactions(prev => prev.filter(t => t.id !== txId));
         alert("সফলভাবে রিজেক্ট করা হয়েছে।");
+        db.getAdminTransactions().then(setAdminTransactions);
       }
     } catch (e: any) { alert(e.message); }
   };
+
+  const handleSavePackage = async () => {
+    if (!editingPackage?.name || !editingPackage?.price || !editingPackage?.tokens) return;
+    try {
+      if (editingPackage.id) {
+        await db.updatePackage(editingPackage.id, editingPackage);
+        alert("প্যাকেজ আপডেট হয়েছে!");
+      } else {
+        await db.createPackage(editingPackage as Omit<Package, 'id'>);
+        alert("নতুন প্যাকেজ তৈরি হয়েছে!");
+      }
+      setEditingPackage(null);
+      db.getPackages().then(setPackages);
+    } catch (e: any) { alert(e.message); }
+  };
+
+  const handleDeletePackage = async (id: string) => {
+    if (!confirm("আপনি কি প্যাকেজটি মুছে ফেলতে চান?")) return;
+    try {
+      await db.deletePackage(id);
+      db.getPackages().then(setPackages);
+    } catch (e: any) { alert(e.message); }
+  };
+
+  const filteredTransactions = adminTransactions.filter(tx => {
+    const matchesSearch = (tx.trx_id?.toLowerCase() || '').includes(adminSearch.toLowerCase()) || 
+                         (tx.user_email?.toLowerCase() || '').includes(adminSearch.toLowerCase());
+    const matchesMethod = adminMethodFilter === 'all' || tx.payment_method === adminMethodFilter;
+    return matchesSearch && matchesMethod;
+  });
 
   const handleSubmitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -320,7 +350,7 @@ const App: React.FC = () => {
                 <div className="flex gap-2 bg-slate-900/50 p-1 rounded-2xl border border-white/5">
                    <button onClick={() => setAdminActiveTab('analytics')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminActiveTab === 'analytics' ? 'bg-cyan-500 text-black' : 'text-slate-500'}`}>Analytics</button>
                    <button onClick={() => setAdminActiveTab('transactions')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminActiveTab === 'transactions' ? 'bg-cyan-500 text-black' : 'text-slate-500'}`}>Transactions</button>
-                   <button onClick={() => setAdminActiveTab('users')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminActiveTab === 'users' ? 'bg-cyan-500 text-black' : 'text-slate-500'}`}>User List</button>
+                   <button onClick={() => setAdminActiveTab('packages')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminActiveTab === 'packages' ? 'bg-cyan-500 text-black' : 'text-slate-500'}`}>Packages</button>
                 </div>
              </div>
              
@@ -358,42 +388,114 @@ const App: React.FC = () => {
                             </div>
                             <div className="p-6 bg-black/40 rounded-3xl border border-white/5 flex items-center justify-between">
                                <div>
-                                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Pending Actions</p>
-                                  <h4 className="text-2xl font-black text-amber-400">{pendingTransactions.length}</h4>
+                                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Records</p>
+                                  <h4 className="text-2xl font-black text-white">{adminTransactions.length}</h4>
                                </div>
-                               <button onClick={() => setAdminActiveTab('transactions')} className="px-6 py-2 bg-amber-400 text-black rounded-xl text-[10px] font-black uppercase">Review Now</button>
+                               <button onClick={() => setAdminActiveTab('transactions')} className="px-6 py-2 bg-cyan-500 text-black rounded-xl text-[10px] font-black uppercase">View All</button>
                             </div>
                          </div>
                       </div>
                    </div>
                 ) : adminActiveTab === 'transactions' ? (
-                   <div className="grid gap-6">
-                      {pendingTransactions.map(tx => (
-                        <div key={tx.id} className="glass-card p-8 rounded-[3rem] border-white/5 flex flex-col md:flex-row items-center gap-10 group hover:border-cyan-500/30 transition-all">
-                           <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-3 mb-2">
-                                 <h3 className="text-xl font-black truncate text-white">{tx.user_email}</h3>
-                                 <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${tx.payment_method === 'bkash' ? 'bg-[#E2136E]' : tx.payment_method === 'nagad' ? 'bg-[#F7941D]' : 'bg-[#8C3494]'}`}>{tx.payment_method}</span>
-                              </div>
-                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3">{new Date(tx.created_at).toLocaleString()}</p>
-                              {tx.message && <div className="mb-4 p-4 bg-white/5 rounded-2xl border border-white/10 italic text-sm text-slate-300">"ইউজার বার্তা: {tx.message}"</div>}
-                              <div className="flex flex-wrap items-center gap-4 mt-4 p-4 bg-black/40 rounded-2xl border border-white/5">
-                                 <p className="text-xs font-mono text-cyan-400">TrxID: <span className="text-white select-all">{tx.trx_id}</span></p>
-                                 <p className="text-xs font-black ml-auto">Amount: <span className="text-green-400">৳{tx.amount}</span></p>
-                              </div>
-                           </div>
-                           <div className="shrink-0">
-                              {tx.screenshot_url ? <img src={tx.screenshot_url} onClick={() => setViewingScreenshot(tx.screenshot_url || null)} className="w-24 h-24 object-cover rounded-[2rem] border-2 border-white/10 cursor-zoom-in hover:scale-110 transition-all" alt="Proof" /> : <div className="w-24 h-24 bg-white/5 rounded-[2rem] flex items-center justify-center text-slate-700 border-2 border-dashed border-white/10"><AlertCircle size={32}/></div>}
-                           </div>
-                           <div className="flex gap-3">
-                              <button onClick={() => handleReject(tx.id)} className="p-5 bg-red-500/10 text-red-500 rounded-[1.5rem] hover:bg-red-500 hover:text-white transition-all"><XCircle size={24}/></button>
-                              <button onClick={() => handleApprove(tx.id)} className="p-5 bg-green-500/10 text-green-500 rounded-[1.5rem] hover:bg-green-500 hover:text-white transition-all shadow-lg"><CheckCircle2 size={24}/></button>
-                           </div>
-                        </div>
-                      ))}
+                   <div className="space-y-6">
+                      <div className="flex flex-col md:flex-row gap-4 mb-8">
+                         <div className="flex-1 relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                            <input type="text" placeholder="Search by TrxID or Email..." value={adminSearch} onChange={e => setAdminSearch(e.target.value)} className="w-full bg-slate-900 border border-white/5 rounded-2xl py-4 pl-12 pr-4 outline-none focus:border-cyan-500/30 transition-all text-sm" />
+                         </div>
+                         <select value={adminMethodFilter} onChange={e => setAdminMethodFilter(e.target.value)} className="bg-slate-900 border border-white/5 rounded-2xl px-6 py-4 outline-none focus:border-cyan-500/30 text-sm font-bold appearance-none cursor-pointer">
+                            <option value="all">All Methods</option>
+                            <option value="bkash">bKash</option>
+                            <option value="nagad">Nagad</option>
+                            <option value="rocket">Rocket</option>
+                         </select>
+                      </div>
+
+                      <div className="grid gap-6">
+                        {filteredTransactions.map(tx => (
+                          <div key={tx.id} className={`glass-card p-8 rounded-[3rem] border-white/5 flex flex-col md:flex-row items-center gap-10 group hover:border-cyan-500/30 transition-all ${tx.status === 'pending' ? 'border-amber-500/20' : tx.status === 'completed' ? 'border-green-500/20 opacity-80' : 'border-red-500/20 opacity-60'}`}>
+                             <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-3 mb-2">
+                                   <h3 className="text-xl font-black truncate text-white">{tx.user_email}</h3>
+                                   <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${tx.payment_method === 'bkash' ? 'bg-[#E2136E]' : tx.payment_method === 'nagad' ? 'bg-[#F7941D]' : 'bg-[#8C3494]'}`}>{tx.payment_method}</span>
+                                   <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${tx.status === 'pending' ? 'border-amber-500 text-amber-500' : tx.status === 'completed' ? 'border-green-500 text-green-500' : 'border-red-500 text-red-500'}`}>{tx.status}</span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3">{new Date(tx.created_at).toLocaleString()}</p>
+                                {tx.message && <div className="mb-4 p-4 bg-white/5 rounded-2xl border border-white/10 italic text-sm text-slate-300">"বার্তা: {tx.message}"</div>}
+                                <div className="flex flex-wrap items-center gap-4 mt-4 p-4 bg-black/40 rounded-2xl border border-white/5">
+                                   <p className="text-xs font-mono text-cyan-400">TrxID: <span className="text-white select-all">{tx.trx_id}</span></p>
+                                   <p className="text-xs font-black ml-auto">Amount: <span className="text-green-400">৳{tx.amount}</span></p>
+                                </div>
+                             </div>
+                             <div className="shrink-0">
+                                {tx.screenshot_url ? <img src={tx.screenshot_url} onClick={() => setViewingScreenshot(tx.screenshot_url || null)} className="w-24 h-24 object-cover rounded-[2rem] border-2 border-white/10 cursor-zoom-in hover:scale-110 transition-all" alt="Proof" /> : <div className="w-24 h-24 bg-white/5 rounded-[2rem] flex items-center justify-center text-slate-700 border-2 border-dashed border-white/10"><AlertCircle size={32}/></div>}
+                             </div>
+                             {tx.status === 'pending' && (
+                                <div className="flex gap-3">
+                                   <button onClick={() => handleReject(tx.id)} className="p-5 bg-red-500/10 text-red-500 rounded-[1.5rem] hover:bg-red-500 hover:text-white transition-all"><XCircle size={24}/></button>
+                                   <button onClick={() => handleApprove(tx.id)} className="p-5 bg-green-500/10 text-green-500 rounded-[1.5rem] hover:bg-green-500 hover:text-white transition-all shadow-lg"><CheckCircle2 size={24}/></button>
+                                </div>
+                             )}
+                          </div>
+                        ))}
+                      </div>
                    </div>
                 ) : (
-                   <div className="glass-card rounded-[3rem] border-white/5 p-12 text-center opacity-30"><Users size={64} className="mx-auto mb-6"/><p className="text-lg font-black uppercase tracking-[0.4em]">User Management Locked</p></div>
+                   <div className="space-y-8 animate-in fade-in">
+                      <div className="flex items-center justify-between mb-6">
+                         <h3 className="text-xl font-black uppercase tracking-widest text-slate-500">Active Packages</h3>
+                         <button onClick={() => setEditingPackage({ name: '', price: 0, tokens: 0, color: 'cyan', icon: 'Package' })} className="px-6 py-3 bg-cyan-600 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-cyan-500 transition-all"><Plus size={16}/> Create New Package</button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                         {packages.map(pkg => (
+                            <div key={pkg.id} className="glass-card p-10 rounded-[4rem] border-white/5 group hover:border-cyan-500/30 transition-all relative overflow-hidden">
+                               <div className="absolute top-6 right-6 flex gap-2">
+                                  <button onClick={() => setEditingPackage(pkg)} className="p-3 bg-white/5 rounded-full text-slate-500 hover:text-cyan-400 hover:bg-cyan-400/10 transition-all"><Edit2 size={16}/></button>
+                                  <button onClick={() => handleDeletePackage(pkg.id)} className="p-3 bg-white/5 rounded-full text-slate-500 hover:text-red-400 hover:bg-red-400/10 transition-all"><Trash2 size={16}/></button>
+                               </div>
+                               <h4 className="text-2xl font-black text-white mb-2">{pkg.name}</h4>
+                               <p className="text-4xl font-black text-cyan-400 tracking-tighter mt-4">{pkg.tokens} <span className="text-xs uppercase opacity-30">Tokens</span></p>
+                               <div className="mt-8 pt-8 border-t border-white/5 flex items-center justify-between">
+                                  <span className="text-xl font-black">৳{pkg.price}</span>
+                                  {pkg.is_popular && <span className="px-3 py-1 bg-amber-500/20 text-amber-500 text-[8px] font-black uppercase rounded-full">Popular</span>}
+                               </div>
+                            </div>
+                         ))}
+                      </div>
+
+                      {editingPackage && (
+                         <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex items-center justify-center p-6 animate-in zoom-in-95">
+                            <div className="max-w-md w-full glass-card p-10 rounded-[3rem] border-white/10 shadow-2xl">
+                               <h2 className="text-3xl font-black mb-8">{editingPackage.id ? 'Edit' : 'New'} <span className="text-cyan-400">Package</span></h2>
+                               <div className="space-y-4">
+                                  <div className="space-y-1">
+                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Package Name</label>
+                                     <input type="text" value={editingPackage.name} onChange={e => setEditingPackage({...editingPackage, name: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl p-4 text-sm" placeholder="e.g. Developer Starter" />
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                     <div className="space-y-1">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Price (BDT)</label>
+                                        <input type="number" value={editingPackage.price} onChange={e => setEditingPackage({...editingPackage, price: Number(e.target.value)})} className="w-full bg-black/40 border border-white/5 rounded-xl p-4 text-sm" placeholder="500" />
+                                     </div>
+                                     <div className="space-y-1">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Tokens</label>
+                                        <input type="number" value={editingPackage.tokens} onChange={e => setEditingPackage({...editingPackage, tokens: Number(e.target.value)})} className="w-full bg-black/40 border border-white/5 rounded-xl p-4 text-sm" placeholder="100" />
+                                     </div>
+                                  </div>
+                                  <div className="flex items-center gap-3 py-2">
+                                     <input type="checkbox" id="is_pop" checked={editingPackage.is_popular} onChange={e => setEditingPackage({...editingPackage, is_popular: e.target.checked})} className="w-5 h-5 accent-cyan-500" />
+                                     <label htmlFor="is_pop" className="text-sm font-bold">Mark as Popular</label>
+                                  </div>
+                                  <div className="flex gap-4 mt-8">
+                                     <button onClick={() => setEditingPackage(null)} className="flex-1 py-4 bg-white/5 rounded-2xl font-black uppercase text-xs">Cancel</button>
+                                     <button onClick={handleSavePackage} className="flex-1 py-4 bg-cyan-600 rounded-2xl font-black uppercase text-xs shadow-xl">Save Changes</button>
+                                  </div>
+                               </div>
+                            </div>
+                         </div>
+                      )}
+                   </div>
                 )}
              </div>
 
