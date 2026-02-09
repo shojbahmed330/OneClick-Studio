@@ -132,15 +132,9 @@ export class DatabaseService {
     
     if (error) return [];
     
-    // ডুপ্লিকেট প্যাকেজ রিমুভ করতে ফিল্টার (একই ID থাকলে একবারই নেবে)
-    const uniquePackagesMap = new Map();
-    data.forEach(pkg => {
-      if (!uniquePackagesMap.has(pkg.id)) {
-        uniquePackagesMap.set(pkg.id, pkg);
-      }
-    });
-    
-    return Array.from(uniquePackagesMap.values()) as Package[];
+    // Ensure unique packages by ID to fix the "6 times" issue
+    const unique = data.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+    return unique as Package[];
   }
 
   async submitPaymentRequest(userId: string, pkgId: string, amount: number, method: string, trxId: string, screenshot?: string, message?: string): Promise<boolean> {
@@ -190,7 +184,7 @@ export class DatabaseService {
 
   async approveTransaction(txId: string): Promise<boolean> {
     try {
-      // ১. ট্রানজ্যাকশন ডাটা ফেচ করুন
+      // 1. Fetch transaction details
       const { data: tx, error: txError } = await this.supabase
         .from('transactions')
         .select('*')
@@ -199,7 +193,7 @@ export class DatabaseService {
         
       if (txError || !tx) throw new Error("পেমেন্ট তথ্য পাওয়া যায়নি");
 
-      // ২. প্যাকেজ থেকে টোকেন সংখ্যা জানুন
+      // 2. Get tokens from the package
       const { data: pkg, error: pkgError } = await this.supabase
         .from('packages')
         .select('tokens')
@@ -209,7 +203,7 @@ export class DatabaseService {
       if (pkgError || !pkg) throw new Error("প্যাকেজ তথ্য পাওয়া যায়নি");
       const tokensToAdd = pkg.tokens || 0;
 
-      // ৩. ইউজারের বর্তমান টোকেন সংখ্যা জানুন
+      // 3. Get user's current tokens
       const { data: user, error: userError } = await this.supabase
         .from('users')
         .select('tokens')
@@ -218,16 +212,16 @@ export class DatabaseService {
         
       if (userError || !user) throw new Error("ইউজার পাওয়া যায়নি");
 
-      // ৪. ইউজারের অ্যাকাউন্টে টোকেন যোগ করুন (টোকেন আপডেট)
-      const newTotalTokens = (user.tokens || 0) + tokensToAdd;
+      // 4. Update user tokens (Credit them)
+      const newTotal = (user.tokens || 0) + tokensToAdd;
       const { error: updateError } = await this.supabase
         .from('users')
-        .update({ tokens: newTotalTokens })
+        .update({ tokens: newTotal })
         .eq('id', tx.user_id);
       
       if (updateError) throw updateError;
 
-      // ৫. ট্রানজ্যাকশন স্ট্যাটাস 'completed' করে দিন
+      // 5. Finalize transaction status (Permanent move to 'completed')
       const { error: finalError } = await this.supabase
         .from('transactions')
         .update({ status: 'completed' })
@@ -237,7 +231,7 @@ export class DatabaseService {
       
       return true;
     } catch (e) {
-      console.error("Approval Error:", e);
+      console.error("Approval flow failed:", e);
       throw e;
     }
   }

@@ -201,7 +201,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (mode === AppMode.SHOP) {
       db.getPackages().then(pkgs => {
-        // ফ্রন্টএন্ডেও একবার ডুপ্লিকেট রিমুভ নিশ্চিত করা হচ্ছে
+        // Double check uniqueness in frontend as well
         const unique = pkgs.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
         setPackages(unique);
       });
@@ -237,20 +237,26 @@ const App: React.FC = () => {
   };
 
   const handleApprove = async (txId: string) => {
-    if (!confirm("আপনি কি পেমেন্টটি অ্যাপ্রুভ করতে চান? এটি সরাসরি ইউজারের প্রোফাইলে টোকেন যোগ করে দেবে।")) return;
+    if (!confirm("আপনি কি পেমেন্টটি অ্যাপ্রুভ করতে চান? এটি ইউজারের টোকেন চিরতরে আপডেট করে দেবে।")) return;
     try {
-      await db.approveTransaction(txId);
-      setPendingTransactions(prev => prev.filter(t => t.id !== txId));
-      alert("পেমেন্ট অ্যাপ্রুভ হয়েছে এবং টোকেন যোগ করা হয়েছে!");
-    } catch (e: any) { alert(e.message); }
+      const success = await db.approveTransaction(txId);
+      if (success) {
+        setPendingTransactions(prev => prev.filter(t => t.id !== txId));
+        alert("পেমেন্ট সফলভাবে অ্যাপ্রুভ হয়েছে এবং টোকেন যোগ হয়েছে!");
+        // Refresh admin data to be sure
+        db.getPendingTransactions().then(setPendingTransactions);
+      }
+    } catch (e: any) { alert("এরর: " + e.message); }
   };
 
   const handleReject = async (txId: string) => {
     if (!confirm("আপনি কি পেমেন্টটি রিজেক্ট করতে চান?")) return;
     try {
-      await db.rejectTransaction(txId);
-      setPendingTransactions(prev => prev.filter(t => t.id !== txId));
-      alert("রিজেক্ট করা হয়েছে।");
+      const success = await db.rejectTransaction(txId);
+      if (success) {
+        setPendingTransactions(prev => prev.filter(t => t.id !== txId));
+        alert("সফলভাবে রিজেক্ট করা হয়েছে।");
+      }
     } catch (e: any) { alert(e.message); }
   };
 
@@ -271,7 +277,7 @@ const App: React.FC = () => {
         }, 3000);
       }
     } catch (e: any) { 
-      alert("Error: " + e.message); 
+      alert("পেমেন্ট সাবমিট এরর: " + e.message); 
       setPaymentStep('form'); 
     }
   };
@@ -330,7 +336,7 @@ const App: React.FC = () => {
                               
                               {tx.message && (
                                 <div className="mb-4 p-4 bg-white/5 rounded-2xl border border-white/10 italic text-sm text-slate-300">
-                                  "ইউজার মেসেজ: {tx.message}"
+                                  "ইউজার বার্তা: {tx.message}"
                                 </div>
                               )}
 
@@ -363,14 +369,14 @@ const App: React.FC = () => {
                       )}
                    </div>
                 ) : (
-                   <div className="glass-card rounded-[3rem] border-white/5 p-12 text-center opacity-30"><Users size={64} className="mx-auto mb-6"/><p className="text-lg font-black uppercase tracking-[0.4em]">User Management Coming Soon</p></div>
+                   <div className="glass-card rounded-[3rem] border-white/5 p-12 text-center opacity-30"><Users size={64} className="mx-auto mb-6"/><p className="text-lg font-black uppercase tracking-[0.4em]">User Management Locked</p></div>
                 )}
              </div>
 
              {viewingScreenshot && (
                <div className="fixed inset-0 z-[100] bg-black/98 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-300" onClick={() => setViewingScreenshot(null)}>
                   <div className="relative max-w-4xl w-full flex flex-col items-center">
-                     <img src={viewingScreenshot} className="max-h-[85vh] rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,1)] border border-white/10" alt="Proof" />
+                     <img src={viewingScreenshot} className="max-h-[85vh] rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,1)] border border-white/10" alt="Full Proof" />
                      <button className="absolute -top-12 right-0 p-4 bg-white/10 rounded-full text-white"><X size={32}/></button>
                   </div>
                </div>
@@ -379,7 +385,7 @@ const App: React.FC = () => {
         ) : mode === AppMode.SHOP ? (
           <div className="flex-1 p-20 overflow-y-auto animate-in slide-in-from-top-4 relative">
              <div className="max-w-6xl mx-auto">
-                <div className="text-center mb-16"><h1 className="text-6xl font-black mb-4 tracking-tighter">Token <span className="text-cyan-400">Vault</span></h1><p className="text-slate-400 text-lg">পছন্দের প্যাকেজ কিনুন এবং এআই ক্ষমতা বাড়িয়ে নিন</p></div>
+                <div className="text-center mb-16"><h1 className="text-6xl font-black mb-4 tracking-tighter">Token <span className="text-cyan-400">Vault</span></h1><p className="text-slate-400 text-lg">ডাটাবেস থেকে প্যাকেজ কিনুন এবং এআই ক্ষমতা বাড়িয়ে নিন</p></div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                   {packages.map((pkg) => (
                     <div key={pkg.id} className="glass-card p-12 rounded-[4rem] border-white/10 relative transition-all hover:scale-[1.03]">
@@ -417,8 +423,8 @@ const App: React.FC = () => {
                            <input type="text" required value={trxId} onChange={e => setTrxId(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-mono text-white" placeholder="Ex: ABCD12345" />
                         </div>
                         <div className="space-y-2">
-                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Message (Optional)</label>
-                           <textarea value={paymentNote} onChange={e => setPaymentNote(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white resize-none" rows={2} placeholder="এডমিনের জন্য কোনো বার্তা থাকলে লিখুন..." />
+                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Optional Message</label>
+                           <textarea value={paymentNote} onChange={e => setPaymentNote(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white resize-none" rows={2} placeholder="এডমিনের জন্য বার্তা লিখুন..." />
                         </div>
                         <div className="relative border-2 border-dashed border-white/10 rounded-xl p-6 flex flex-col items-center cursor-pointer hover:border-cyan-500/40 transition-all">
                            <input type="file" accept="image/*" onChange={e => {
@@ -429,9 +435,9 @@ const App: React.FC = () => {
                                   reader.readAsDataURL(file);
                                }
                            }} className="absolute inset-0 opacity-0 cursor-pointer" />
-                           {screenshot ? <img src={screenshot} className="w-full h-32 object-cover rounded-lg" alt="Proof"/> : <><Upload className="text-slate-500 mb-2" size={24}/><p className="text-[9px] text-slate-500 font-bold uppercase text-center">Upload screenshot</p></>}
+                           {screenshot ? <img src={screenshot} className="w-full h-32 object-cover rounded-lg" alt="Proof"/> : <><Upload className="text-slate-500 mb-2" size={24}/><p className="text-[9px] text-slate-500 font-bold uppercase text-center">Click to upload proof</p></>}
                         </div>
-                        <button type="submit" className="w-full py-4 bg-cyan-600 rounded-xl font-black uppercase text-sm">Send Request</button>
+                        <button type="submit" className="w-full py-4 bg-cyan-600 rounded-xl font-black uppercase text-sm">Send Proof</button>
                         <button type="button" onClick={() => setPaymentStep('method')} className="w-full text-slate-500 text-[9px] font-bold uppercase">Back</button>
                       </form>
                     ) : paymentStep === 'processing' ? (
